@@ -24,7 +24,11 @@ _TLOG_LIB_LOADED=1
 TLOG_LIB_VERSION="2.0.1"
 
 # Journal filter registry — consuming projects populate via tlog_journal_register()
-declare -A TLOG_JOURNAL_MAP
+# Uses parallel indexed arrays instead of declare -A to avoid scope issues
+# when sourced from inside a function (e.g., BATS load, wrapper functions).
+# Simple array assignment creates globals; declare -A creates locals in functions.
+_TLOG_JOURNAL_NAMES=()
+_TLOG_JOURNAL_FILTERS=()
 
 ###########################################################################
 # Internal helpers
@@ -416,7 +420,8 @@ tlog_advance_cursors() {
 # Register a service-to-journalctl filter mapping. Consuming projects
 # call this after sourcing tlog_lib.sh to define their service mappings.
 tlog_journal_register() {
-	TLOG_JOURNAL_MAP[$1]="$2"
+	_TLOG_JOURNAL_NAMES+=("$1")
+	_TLOG_JOURNAL_FILTERS+=("$2")
 }
 
 # tlog_journal_filter(tlog_name)
@@ -424,10 +429,13 @@ tlog_journal_register() {
 # Returns filter on stdout, exit 1 for unknown/unregistered service.
 tlog_journal_filter() {
 	local tlog_name="$1"
-	if [[ -n "${TLOG_JOURNAL_MAP[$tlog_name]:-}" ]]; then
-		printf '%s' "${TLOG_JOURNAL_MAP[$tlog_name]}"
-		return 0
-	fi
+	local i
+	for i in "${!_TLOG_JOURNAL_NAMES[@]}"; do
+		if [[ "${_TLOG_JOURNAL_NAMES[$i]}" == "$tlog_name" ]]; then
+			printf '%s' "${_TLOG_JOURNAL_FILTERS[$i]}"
+			return 0
+		fi
+	done
 	return 1
 }
 

@@ -20,10 +20,16 @@
       tlog_journal_read (cursor-based with timestamp fallback),
       tlog_journal_read_full (no cursor, timeout support)
   [Change] Replace tlog_journal_filter() hardcoded case statement with
-      associative array lookup via TLOG_JOURNAL_MAP registry; library
-      contains zero project-specific service names
+      indexed array registry; library contains zero project-specific
+      service names
   [New] tlog_journal_register(name, filter): registration primitive for
       consuming projects to define service-to-journalctl filter mappings
+  [Change] Journal filter registry uses parallel indexed arrays instead of
+      declare -A to avoid scope issues when sourced from inside functions
+  [New] BATS test suite: 74 tests covering both tracking modes, rotation,
+      cursor validation, flock locking, atomic writes, journal, standalone CLI
+  [New] Docker-based test infrastructure: Debian 12, Rocky 9, CentOS 6
+      targets with parallel execution support
   [New] Cursor adjustment for log trim via tlog_adjust_cursor with mode
       detection and clamp-to-zero
   [New] Fast-forward multiple cursors via tlog_advance_cursors for file and
