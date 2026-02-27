@@ -45,3 +45,20 @@
       compression dispatch via _tlog_is_compressed/_tlog_cat_file
   [New] Copytruncate and multi-format compression rotation tests with
       false-positive coverage; test Dockerfiles add xz, bzip2, zstd packages
+  [New] Standalone tlog CLI expansion: option parsing (-m/--mode, -b/--baserun,
+      -f/--flock, --first-run), subcommands (--full, --status, --reset,
+      --adjust), version banner (-v/--version), short help (-h), detailed
+      help with examples (--help); full backward compatibility with positional
+      interface preserved
+  [New] --status subcommand: display cursor state (path, mode, value, age),
+      optional file argument shows size and pending delta, reports .jts and
+      .lock presence; read-only — does not modify any files
+  [New] --reset subcommand: delete cursor, .jts, .lock, and orphaned temp
+      files; reports each deletion; always exits 0
+  [New] --adjust subcommand: delegates to tlog_adjust_cursor() for mode-aware
+      cursor subtraction after in-place log trimming
+  [New] --full subcommand: delegates to tlog_read_full() for cursorless
+      full-file reads; does not require BASERUN
+  [New] Standalone CLI test expansion: 40 new tests (50 total) covering
+      help/version, option flags, all subcommands, error handling, and
+      false-positive verification

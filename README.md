@@ -85,18 +85,62 @@ fi
 ### As a Standalone Script
 
 The `tlog` wrapper provides a CLI interface for use from cron jobs or scripts
-that can't source the library:
+that can't source the library. It supports the original positional interface
+plus option flags and subcommands:
 
 ```bash
-# Read new content from auth.log
+# Incremental read (positional — backward compatible)
 tlog /var/log/auth.log auth_tracker
-
-# Read with line-count mode
 tlog /var/log/mail.log mail_tracker lines
+
+# Incremental read with option flags
+tlog -m lines /var/log/mail.log mail_tracker
+tlog -f -b /opt/myapp/tmp /var/log/syslog syslog
+tlog --first-run full /var/log/app.log app
 
 # Pipe new entries to a processor
 tlog /var/log/syslog syslog | grep "CRIT" | alert-handler
+
+# Full file read (no cursor tracking)
+tlog --full /var/log/syslog
+tlog --full /var/log/syslog 500
+
+# Check cursor state
+tlog --status syslog
+tlog --status syslog /var/log/syslog
+
+# Reset tracking for a log
+tlog --reset auth
+
+# Adjust cursor after trimming bytes from top of log
+tlog --adjust mylog 4096
+
+# Help and version
+tlog -h              # short usage
+tlog --help          # detailed help with examples
+tlog -v              # version banner
 ```
+
+**Options:**
+
+| Flag | Effect |
+|------|--------|
+| `-m, --mode MODE` | Set tracking mode (`bytes` or `lines`) |
+| `-b, --baserun DIR` | Override cursor storage directory |
+| `-f, --flock` | Enable flock-based cursor locking |
+| `--first-run skip\|full` | First-run behavior (default: `skip`) |
+| `-v, --version` | Show version banner and exit |
+| `-h` | Show short usage and exit |
+| `--help` | Show detailed help with examples and exit |
+
+**Subcommands:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `--full <file> [max_lines]` | Read entire file without cursor tracking |
+| `--status <name> [file]` | Display cursor state (read-only) |
+| `--reset <name>` | Delete cursor and related files |
+| `--adjust <name> <delta>` | Subtract delta from stored cursor |
 
 ## Securing Cursor Storage
 
@@ -479,10 +523,11 @@ make -C tests test-rocky9    # Rocky 9
 make -C tests test-all       # Full matrix (Debian 12, Rocky 9, CentOS 6)
 ```
 
-Tests run inside Docker containers via BATS. 84 tests cover both tracking
+Tests run inside Docker containers via BATS. 124 tests cover both tracking
 modes, rotation (including copytruncate and multi-format compression),
 cursor validation and corruption, flock locking, atomic writes, journal
-functions, and the standalone CLI wrapper.
+functions, and the standalone CLI wrapper (50 tests covering option
+parsing, subcommands, help/version, and false-positive verification).
 
 ## License
 
