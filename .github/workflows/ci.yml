@@ -20,4 +20,4 @@ jobs:
     uses: rfxn/batsman/.github/workflows/test.yml@v1.0.1
     with:
       project-name: tlog
-      os-matrix: '["debian12","centos6","centos7","rocky8","rocky9","ubuntu1204","ubuntu2004","ubuntu2404"]'
+      os-matrix: '["debian12","centos6","centos7","rocky8","rocky9","rocky10","ubuntu1204","ubuntu2004","ubuntu2404"]'
