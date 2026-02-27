@@ -23,6 +23,9 @@ _TLOG_LIB_LOADED=1
 # shellcheck disable=SC2034
 TLOG_LIB_VERSION="2.0.1"
 
+# Journal filter registry — consuming projects populate via tlog_journal_register()
+declare -A TLOG_JOURNAL_MAP
+
 ###########################################################################
 # Internal helpers
 ###########################################################################
@@ -409,38 +412,23 @@ tlog_advance_cursors() {
 # Journal functions
 ###########################################################################
 
+# tlog_journal_register(tlog_name, jfilter)
+# Register a service-to-journalctl filter mapping. Consuming projects
+# call this after sourcing tlog_lib.sh to define their service mappings.
+tlog_journal_register() {
+	TLOG_JOURNAL_MAP[$1]="$2"
+}
+
 # tlog_journal_filter(tlog_name)
-# Map service tag to journalctl filter string.
-# Returns filter on stdout, exit 1 for unknown service.
+# Look up journalctl filter string for a service tag.
+# Returns filter on stdout, exit 1 for unknown/unregistered service.
 tlog_journal_filter() {
 	local tlog_name="$1"
-	case "$tlog_name" in
-		sshd)              echo "SYSLOG_IDENTIFIER=sshd" ;;
-		dropbear)          echo "SYSLOG_IDENTIFIER=dropbear" ;;
-		dovecot)           echo "SYSLOG_IDENTIFIER=dovecot" ;;
-		postfix)           echo "SYSLOG_IDENTIFIER=postfix" ;;
-		courier)           echo "SYSLOG_IDENTIFIER=couriertcpd" ;;
-		sendmail)          echo "SYSLOG_IDENTIFIER=sm-mta" ;;
-		vpopmail)          echo "SYSLOG_IDENTIFIER=vpopmail" ;;
-		cyrus)             echo "SYSLOG_IDENTIFIER=cyrus" ;;
-		pure-ftpd)         echo "SYSLOG_IDENTIFIER=pure-ftpd" ;;
-		proftpd)           echo "SYSLOG_IDENTIFIER=proftpd" ;;
-		vsftpd)            echo "SYSLOG_IDENTIFIER=vsftpd" ;;
-		webmin)            echo "SYSLOG_IDENTIFIER=webmin" ;;
-		wordpress)         echo "SYSLOG_IDENTIFIER=wordpress" ;;
-		rh_imapd)          echo "SYSLOG_IDENTIFIER=imapd" ;;
-		rh_ipop3)          echo "SYSLOG_IDENTIFIER=ipop3d" ;;
-		named)             echo "SYSLOG_IDENTIFIER=named" ;;
-		openvpn)           echo "SYSLOG_IDENTIFIER=openvpn" ;;
-		exim_authfail)     echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
-		exim_nxuser)       echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
-		xrdp)              echo "SYSLOG_IDENTIFIER=xrdp-sesman" ;;
-		asterisk)          echo "SYSLOG_IDENTIFIER=asterisk" ;;
-		asterisk.iax)      echo "SYSLOG_IDENTIFIER=asterisk" ;;
-		asterisk_nopeer)   echo "SYSLOG_IDENTIFIER=asterisk" ;;
-		*) return 1 ;;
-	esac
-	return 0
+	if [[ -n "${TLOG_JOURNAL_MAP[$tlog_name]:-}" ]]; then
+		printf '%s' "${TLOG_JOURNAL_MAP[$tlog_name]}"
+		return 0
+	fi
+	return 1
 }
 
 # tlog_journal_read(tlog_name, baserun)
