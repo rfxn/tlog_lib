@@ -1,0 +1,11 @@
+ARG BASE_IMAGE=tlog-base-ubuntu1204
+FROM ${BASE_IMAGE}
+
+# Compression tools for multi-format rotation tests (gzip in base image; no zstd on 12.04)
+RUN apt-get update && apt-get install -y xz-utils bzip2 && rm -rf /var/lib/apt/lists/*
+
+COPY files/ /opt/tlog_lib/files/
+COPY tests/ /opt/tlog_lib/tests/
+
+WORKDIR /opt/tlog_lib/tests
+CMD ["bats", "--formatter", "tap", "/opt/tlog_lib/tests/"]

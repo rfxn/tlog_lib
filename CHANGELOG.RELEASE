@@ -1,0 +1,64 @@
+- 2.0.1 | Feb 27 2026:
+  [New] tlog_lib.sh: shared Bash library for incremental log file reading
+      with cursor-based position tracking; multi-mode tracking (byte-offset
+      via tail -c, line-count via tail -n) selectable per call or TLOG_MODE
+      env; mode-aware cursor format (bare number = bytes, L:N = lines) with
+      automatic mismatch detection and reset; configurable first-run behavior
+      (TLOG_FIRST_RUN=skip|full); structured error codes 0-4; source guard
+      prevents double-sourcing
+  [New] Atomic cursor writes via mktemp + mv -f; optional flock-based
+      cursor locking (TLOG_FLOCK=1) with 5-second timeout; cursor validation
+      with regex check and auto-reset on corruption; stale cursor protection
+      via mtime touch on every tlog_read call
+  [New] Rotation-aware delta reads: .1 and compressed variants (.1.gz,
+      .1.xz, .1.bz2, .1.zst, .1.lz4) with runtime tool availability check
+      via command -v; uncompressed .1 retains highest priority; compressed
+      files read via pipe (never decompressed on disk); generic decompression
+      dispatch via _tlog_is_compressed() and _tlog_cat_file(); supports both
+      create and copytruncate logrotate strategies
+  [New] tlog_adjust_cursor(): mode-aware cursor subtraction for in-place
+      log trim with clamp-to-zero; tlog_advance_cursors(): fast-forward
+      multiple file and journal cursors from FILE|TAG pairs
+  [New] Journal support: registry-based filter system via parallel indexed
+      arrays (avoids declare -A scope issues); tlog_journal_register() for
+      consuming projects to define service-to-journalctl mappings;
+      tlog_journal_read() cursor-based with timestamp fallback;
+      tlog_journal_read_full() for scan mode with timeout support
+  [New] Standalone tlog CLI wrapper: sources tlog_lib.sh with security
+      check (root ownership, not world-writable); option parsing (-m/--mode,
+      -b/--baserun, -f/--flock, --first-run); subcommands (--full, --status,
+      --reset, --adjust); version banner (-v/--version), short help (-h),
+      detailed help with examples (--help); full backward compatibility with
+      positional interface (file, tlog_name, optional mode) preserved;
+      BASERUN sed-replaced at install time for cursor storage security
+  [New] --status subcommand: display cursor state (path, mode, value, age),
+      optional file argument shows size and pending delta, reports .jts and
+      .lock presence; read-only — does not modify any files
+  [New] --reset subcommand: delete cursor, .jts, .lock, and orphaned temp
+      files; reports each deletion; always exits 0
+  [New] --adjust subcommand: delegates to tlog_adjust_cursor() for mode-aware
+      cursor subtraction after in-place log trimming
+  [New] --full subcommand: delegates to tlog_read_full() for cursorless
+      full-file reads; does not require BASERUN
+  [New] BATS test suite: 133 tests covering both tracking modes, rotation
+      (including copytruncate and multi-format compression), cursor validation,
+      flock locking, atomic writes, journal functions, and standalone CLI
+      (58 tests covering option parsing, subcommands, help/version,
+      false-positive verification, path traversal rejection, and mode
+      validation); Docker infrastructure via batsman shared framework with
+      9 OS targets; GitHub Actions CI via batsman reusable workflow
+  [New] README.md: public-facing documentation with platform support matrix,
+      API reference, security guidance for cursor storage, and usage examples
+  [Fix] Cursor name path traversal: reject names containing '/' or equal
+      to '.'/'..'; prevents --reset, --status, --adjust, and read from
+      operating on files outside the BASERUN directory
+  [Fix] Tracking mode validation: tlog_read() and standalone CLI wrapper
+      reject invalid mode strings (e.g., 'line' instead of 'lines') before
+      any I/O; prevents silent cursor mismatch reset loop on typos;
+      defense-in-depth across library and CLI layers
+  [Fix] Shellcheck CI: replace incorrect source= directive with
+      disable=SC1090,SC1091 for dynamic library source path; resolves lint job
+      exit 1 on all CI runs
+  [Fix] CentOS 7 journal test: use nonexistent PATH instead of /usr/bin:/bin
+      to reliably hide journalctl on systemd systems; avoids POSIX empty-PATH
+      CWD-search edge case

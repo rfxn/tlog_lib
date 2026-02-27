@@ -1,0 +1,11 @@
+ARG BASE_IMAGE=tlog-base-rocky8
+FROM ${BASE_IMAGE}
+
+# Compression tools for multi-format rotation tests (gzip in base image)
+RUN microdnf install -y xz bzip2 zstd && microdnf clean all
+
+COPY files/ /opt/tlog_lib/files/
+COPY tests/ /opt/tlog_lib/tests/
+
+WORKDIR /opt/tlog_lib/tests
+CMD ["bats", "--formatter", "tap", "/opt/tlog_lib/tests/"]
