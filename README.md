@@ -246,8 +246,9 @@ Core incremental reader. Outputs new content since the last call to stdout.
   of the current file
 - **No change** — outputs nothing, touches cursor mtime
 
-**Returns:** 0 on success, 1 on file/path error, 2 on cursor corruption
-(auto-reset), 3 if journal unavailable, 4 if lock not acquired.
+**Returns:** 0 on success, 1 on invalid input (missing file, bad path,
+invalid mode), 2 on cursor corruption (auto-reset), 3 if journal
+unavailable, 4 if lock not acquired.
 
 ```bash
 # Basic usage — cursor stored in project-owned directory
@@ -359,7 +360,7 @@ and line limits.
 | Code | Meaning | Recommended Action |
 |------|---------|-------------------|
 | 0 | Success (content output or no new content) | Continue normally |
-| 1 | File not found or invalid path | Skip this source |
+| 1 | Invalid input (missing file, bad path, invalid mode, bad cursor name) | Check arguments |
 | 2 | Cursor corrupt (auto-reset performed) | Log warning, continue |
 | 3 | Journal unavailable (`journalctl` not found) | Fall back to file mode |
 | 4 | Lock acquisition failed (`TLOG_FLOCK=1`) | Retry on next cycle |
@@ -520,14 +521,15 @@ applies to the standalone `tlog` wrapper, which needs a default when no
 ```bash
 make -C tests test           # Debian 12 (primary)
 make -C tests test-rocky9    # Rocky 9
-make -C tests test-all       # Full matrix (Debian 12, Rocky 9, CentOS 6)
+make -C tests test-all       # Full 9-OS matrix
 ```
 
-Tests run inside Docker containers via BATS. 124 tests cover both tracking
+Tests run inside Docker containers via BATS. 133 tests cover both tracking
 modes, rotation (including copytruncate and multi-format compression),
 cursor validation and corruption, flock locking, atomic writes, journal
-functions, and the standalone CLI wrapper (50 tests covering option
-parsing, subcommands, help/version, and false-positive verification).
+functions, and the standalone CLI wrapper (58 tests covering option
+parsing, subcommands, help/version, false-positive verification, path
+traversal rejection, and mode validation).
 
 ## License
 

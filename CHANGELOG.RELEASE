@@ -1,4 +1,4 @@
-- 2.0.1 | Feb 26 2026:
+- 2.0.1 | Feb 27 2026:
   [New] tlog_lib.sh: shared Bash library for incremental log file reading
       with cursor-based position tracking; multi-mode tracking (byte-offset
       via tail -c, line-count via tail -n) selectable per call or TLOG_MODE
@@ -10,8 +10,12 @@
       cursor locking (TLOG_FLOCK=1) with 5-second timeout; cursor validation
       with regex check and auto-reset on corruption; stale cursor protection
       via mtime touch on every tlog_read call
-  [New] Rotation-aware delta reads: .1 and .1.gz discovery with bounds
-      checking; .gz read via zcat pipe (read-only, never decompresses on disk)
+  [New] Rotation-aware delta reads: .1 and compressed variants (.1.gz,
+      .1.xz, .1.bz2, .1.zst, .1.lz4) with runtime tool availability check
+      via command -v; uncompressed .1 retains highest priority; compressed
+      files read via pipe (never decompressed on disk); generic decompression
+      dispatch via _tlog_is_compressed() and _tlog_cat_file(); supports both
+      create and copytruncate logrotate strategies
   [New] tlog_adjust_cursor(): mode-aware cursor subtraction for in-place
       log trim with clamp-to-zero; tlog_advance_cursors(): fast-forward
       multiple file and journal cursors from FILE|TAG pairs
@@ -21,35 +25,12 @@
       tlog_journal_read() cursor-based with timestamp fallback;
       tlog_journal_read_full() for scan mode with timeout support
   [New] Standalone tlog CLI wrapper: sources tlog_lib.sh with security
-      check (root ownership, not world-writable); backward-compatible
-      argument parsing (file, tlog_name, optional mode); BASERUN
-      sed-replaced at install time for cursor storage security
-  [New] BATS test suite: 74 tests covering both tracking modes, rotation,
-      cursor validation, flock locking, atomic writes, journal, and
-      standalone CLI; Docker infrastructure for Debian 12, Rocky 9,
-      CentOS 6 with parallel execution
-  [New] README.md: public-facing documentation with platform support matrix,
-      API reference, security guidance for cursor storage, and usage examples
-  [Change] Migrate test infrastructure to batsman shared framework via git
-      submodule at tests/infra/; thin project-layer Dockerfiles for 9 OS
-      targets (debian12, centos6, centos7, rocky8, rocky9, rocky10,
-      ubuntu1204, ubuntu2004, ubuntu2404); batsman-driven orchestration
-      replaces custom run-tests.sh and Makefile; GitHub Actions CI via
-      batsman reusable workflow
-  [New] _tlog_is_compressed() and _tlog_cat_file(): generic decompression
-      dispatch supporting gzip, xz, bzip2, zstd, lz4 via -dc flags
-  [Change] _tlog_find_rotated() extended with .1.xz, .1.bz2, .1.zst, .1.lz4
-      compressed rotated file discovery; runtime tool availability check via
-      command -v; uncompressed .1 retains highest priority
-  [Change] tlog_read() rotation refactored from hardcoded gzip/zcat to generic
-      compression dispatch via _tlog_is_compressed/_tlog_cat_file
-  [New] Copytruncate and multi-format compression rotation tests with
-      false-positive coverage; test Dockerfiles add xz, bzip2, zstd packages
-  [New] Standalone tlog CLI expansion: option parsing (-m/--mode, -b/--baserun,
-      -f/--flock, --first-run), subcommands (--full, --status, --reset,
-      --adjust), version banner (-v/--version), short help (-h), detailed
-      help with examples (--help); full backward compatibility with positional
-      interface preserved
+      check (root ownership, not world-writable); option parsing (-m/--mode,
+      -b/--baserun, -f/--flock, --first-run); subcommands (--full, --status,
+      --reset, --adjust); version banner (-v/--version), short help (-h),
+      detailed help with examples (--help); full backward compatibility with
+      positional interface (file, tlog_name, optional mode) preserved;
+      BASERUN sed-replaced at install time for cursor storage security
   [New] --status subcommand: display cursor state (path, mode, value, age),
       optional file argument shows size and pending delta, reports .jts and
       .lock presence; read-only — does not modify any files
@@ -59,18 +40,22 @@
       cursor subtraction after in-place log trimming
   [New] --full subcommand: delegates to tlog_read_full() for cursorless
       full-file reads; does not require BASERUN
-  [New] Standalone CLI test expansion: 46 new tests (56 total) covering
-      help/version, option flags, all subcommands, error handling,
-      false-positive verification, and path traversal rejection
+  [New] BATS test suite: 133 tests covering both tracking modes, rotation
+      (including copytruncate and multi-format compression), cursor validation,
+      flock locking, atomic writes, journal functions, and standalone CLI
+      (58 tests covering option parsing, subcommands, help/version,
+      false-positive verification, path traversal rejection, and mode
+      validation); Docker infrastructure via batsman shared framework with
+      9 OS targets; GitHub Actions CI via batsman reusable workflow
+  [New] README.md: public-facing documentation with platform support matrix,
+      API reference, security guidance for cursor storage, and usage examples
   [Fix] Cursor name path traversal: reject names containing '/' or equal
       to '.'/'..'; prevents --reset, --status, --adjust, and read from
       operating on files outside the BASERUN directory
-  [Fix] Tracking mode validation in tlog CLI wrapper: reject invalid mode
-      values (e.g., 'line' instead of 'lines') in both -m flag and positional
-      argument; prevents silent cursor mismatch reset loop on typos
-  [Fix] Tracking mode validation in tlog_lib.sh: tlog_read() rejects invalid
-      mode strings before any I/O, returning exit 1 with descriptive error;
-      defense-in-depth for programmatic callers (BFD, LMD) beyond CLI
+  [Fix] Tracking mode validation: tlog_read() and standalone CLI wrapper
+      reject invalid mode strings (e.g., 'line' instead of 'lines') before
+      any I/O; prevents silent cursor mismatch reset loop on typos;
+      defense-in-depth across library and CLI layers
   [Fix] Shellcheck CI: replace incorrect source= directive with
       disable=SC1090,SC1091 for dynamic library source path; resolves lint job
       exit 1 on all CI runs
