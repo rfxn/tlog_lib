@@ -16,8 +16,10 @@ tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
 
 - **Two tracking modes** — byte-offset (`tail -c`) for maximum throughput or
   line-count (`tail -n`) for guaranteed whole-line output
-- **Log rotation aware** — detects `.1` and `.1.gz` rotated files, outputs the
-  remainder from the old file plus the new file, then resets the cursor
+- **Log rotation aware** — detects `.1` and compressed variants (`.1.gz`,
+  `.1.xz`, `.1.bz2`, `.1.zst`, `.1.lz4`) with runtime tool detection, outputs
+  the remainder from the old file plus the new file, then resets the cursor;
+  works with both `create` and `copytruncate` logrotate strategies
 - **Atomic cursor writes** — `mktemp` + `mv -f` ensures cursors are never
   empty or half-written, even on crash or OOM kill
 - **Optional flock locking** — prevents cursor corruption when multiple
@@ -31,7 +33,8 @@ tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
 - **Structured exit codes** — callers can distinguish success, file errors,
   cursor corruption, journal unavailability, and lock contention
 - **Zero external dependencies** — POSIX coreutils only (`stat`, `tail`, `wc`,
-  `mktemp`, `mv`, `flock`, `zcat`); no interpreters, no package managers
+  `mktemp`, `mv`, `flock`); compression tools (`gzip`, `xz`, `bzip2`, `zstd`,
+  `lz4`) detected at runtime and used opportunistically for rotated files
 
 ## Platform Support
 
@@ -194,8 +197,9 @@ Core incremental reader. Outputs new content since the last call to stdout.
 - **First run** — records current file size/lines, outputs nothing (or entire
   file if `TLOG_FIRST_RUN=full`)
 - **Growth** — outputs the delta between stored cursor and current size
-- **Rotation** — detects file shrinkage, reads remainder from `.1`/`.1.gz`,
-  then reads all of the current file
+- **Rotation** — detects file shrinkage, reads remainder from rotated file
+  (`.1`, `.1.gz`, `.1.xz`, `.1.bz2`, `.1.zst`, `.1.lz4`), then reads all
+  of the current file
 - **No change** — outputs nothing, touches cursor mtime
 
 **Returns:** 0 on success, 1 on file/path error, 2 on cursor corruption
@@ -384,10 +388,11 @@ No special handling needed — `tlog_read` detects rotation automatically:
 
 ```bash
 # This works even when logrotate runs between calls.
-# If /var/log/syslog was rotated to /var/log/syslog.1 (or .1.gz),
-# tlog_read outputs the remainder from the rotated file, then
-# the full content of the new file. Compressed rotated files are
-# read via zcat pipe — never decompressed on disk.
+# If /var/log/syslog was rotated to /var/log/syslog.1 (or .1.gz,
+# .1.xz, .1.bz2, .1.zst, .1.lz4), tlog_read outputs the remainder
+# from the rotated file, then the full content of the new file.
+# Compressed rotated files are decompressed via pipe — never on disk.
+# Works with both 'create' and 'copytruncate' logrotate strategies.
 tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
 ```
 
@@ -474,9 +479,10 @@ make -C tests test-rocky9    # Rocky 9
 make -C tests test-all       # Full matrix (Debian 12, Rocky 9, CentOS 6)
 ```
 
-Tests run inside Docker containers via BATS. 74 tests cover both tracking
-modes, rotation, cursor validation and corruption, flock locking, atomic
-writes, journal functions, and the standalone CLI wrapper.
+Tests run inside Docker containers via BATS. 84 tests cover both tracking
+modes, rotation (including copytruncate and multi-format compression),
+cursor validation and corruption, flock locking, atomic writes, journal
+functions, and the standalone CLI wrapper.
 
 ## License
 

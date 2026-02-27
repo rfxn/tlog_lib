@@ -1,8 +1,9 @@
 ARG BASE_IMAGE=tlog-base-debian12
 FROM ${BASE_IMAGE}
 
-# tlog_lib needs no additional packages — batsman base provides
-# coreutils, util-linux (flock), gzip (zcat), and all POSIX primitives.
+# Compression tools for multi-format rotation tests (gzip in base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xz-utils bzip2 zstd && rm -rf /var/lib/apt/lists/*
 
 COPY files/ /opt/tlog_lib/files/
 COPY tests/ /opt/tlog_lib/tests/

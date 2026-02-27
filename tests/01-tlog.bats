@@ -548,3 +548,142 @@ teardown() {
 	read -r cursor_after < "$BASERUN/testlog"
 	[[ "$cursor_before" == "$cursor_after" ]]
 }
+
+# ===================================================================
+# Copytruncate Rotation (3 tests)
+# ===================================================================
+
+@test "tlog_read bytes: copytruncate rotation outputs remainder from .1" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Simulate copytruncate: copy current file to .1, then truncate original
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1"
+	: > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# Output should contain the remainder from .1 (line four)
+	[[ "$output" == *"line four"* ]]
+}
+
+@test "tlog_read lines: copytruncate rotation outputs remainder from .1" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines" >/dev/null 2>&1
+	printf 'line four\nline five\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1"
+	: > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"line five"* ]]
+}
+
+@test "tlog_read bytes: copytruncate with new writes after truncation" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1"
+	: > "$LOGFILE"
+	# New content written to truncated file
+	printf 'fresh content\n' > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# Both remainder from .1 and new content should appear
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"fresh content"* ]]
+}
+
+# ===================================================================
+# Multi-Format Compression Rotation (4 tests)
+# ===================================================================
+
+@test "tlog_read bytes: rotation with .1.xz" {
+	command -v xz >/dev/null 2>&1 || skip "xz not available"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	xz -c "$LOGFILE" > "${LOGFILE}.1.xz"
+	printf 'new file line one\n' > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"new file line one"* ]]
+}
+
+@test "tlog_read bytes: rotation with .1.bz2" {
+	command -v bzip2 >/dev/null 2>&1 || skip "bzip2 not available"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	bzip2 -c "$LOGFILE" > "${LOGFILE}.1.bz2"
+	printf 'new file line one\n' > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"new file line one"* ]]
+}
+
+@test "tlog_read bytes: rotation with .1.zst" {
+	command -v zstd >/dev/null 2>&1 || skip "zstd not available"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	zstd -c "$LOGFILE" > "${LOGFILE}.1.zst" 2>/dev/null
+	printf 'new file line one\n' > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"new file line one"* ]]
+}
+
+@test "tlog_read bytes: compressed files still exist after read" {
+	command -v xz >/dev/null 2>&1 || skip "xz not available"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	xz -c "$LOGFILE" > "${LOGFILE}.1.xz"
+	printf 'new file line one\n' > "$LOGFILE"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# FP: .1.xz must still exist (never decompressed on disk)
+	[[ -f "${LOGFILE}.1.xz" ]]
+}
+
+# ===================================================================
+# Compression False-Positive + Priority (3 tests)
+# ===================================================================
+
+@test "compressed rotated file skipped when tool unavailable" {
+	# Create a .1.lz4 file — lz4 is not installed in test containers
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	# Write a fake .1.lz4 (content doesn't matter since lz4 is unavailable)
+	printf 'fake lz4 content\n' > "${LOGFILE}.1.lz4"
+	printf 'new file line one\n' > "$LOGFILE"
+	if command -v lz4 >/dev/null 2>&1; then
+		skip "lz4 is installed — cannot test tool-unavailable path"
+	fi
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# Graceful: no rotated content (tool missing), just current file
+	[[ "$output" == *"new file line one"* ]]
+	[[ "$output" != *"fake lz4 content"* ]]
+}
+
+@test "_tlog_find_rotated prefers .1 over .1.gz" {
+	printf 'uncompressed rotated\n' > "${LOGFILE}.1"
+	gzip -c "${LOGFILE}.1" > "${LOGFILE}.1.gz"
+	run _tlog_find_rotated "$LOGFILE"
+	[[ "$status" -eq 0 ]]
+	# Must prefer uncompressed .1
+	[[ "$output" == "${LOGFILE}.1" ]]
+}
+
+@test "tlog_read bytes: growth does not read from compressed rotated files" {
+	command -v xz >/dev/null 2>&1 || skip "xz not available"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Growth path: append to current file
+	printf 'appended content\n' >> "$LOGFILE"
+	# Place compressed rotated files with distinctive content
+	printf 'XZ ROTATED SHOULD NOT APPEAR\n' | xz -c > "${LOGFILE}.1.xz"
+	command -v bzip2 >/dev/null 2>&1 && \
+		printf 'BZ2 ROTATED SHOULD NOT APPEAR\n' | bzip2 -c > "${LOGFILE}.1.bz2"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# FP: compressed rotated content must NOT appear in growth output
+	[[ "$output" != *"XZ ROTATED SHOULD NOT APPEAR"* ]]
+	[[ "$output" != *"BZ2 ROTATED SHOULD NOT APPEAR"* ]]
+	[[ "$output" == *"appended content"* ]]
+}

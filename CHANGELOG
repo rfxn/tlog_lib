@@ -39,3 +39,12 @@ tlog_lib CHANGELOG
       ubuntu1204, ubuntu2004, ubuntu2404); batsman-driven orchestration
       replaces custom run-tests.sh and Makefile; GitHub Actions CI via
       batsman reusable workflow
+  [New] _tlog_is_compressed() and _tlog_cat_file(): generic decompression
+      dispatch supporting gzip, xz, bzip2, zstd, lz4 via -dc flags
+  [Change] _tlog_find_rotated() extended with .1.xz, .1.bz2, .1.zst, .1.lz4
+      compressed rotated file discovery; runtime tool availability check via
+      command -v; uncompressed .1 retains highest priority
+  [Change] tlog_read() rotation refactored from hardcoded gzip/zcat to generic
+      compression dispatch via _tlog_is_compressed/_tlog_cat_file
+  [New] Copytruncate and multi-format compression rotation tests with
+      false-positive coverage; test Dockerfiles add xz, bzip2, zstd packages

@@ -1,6 +1,10 @@
 ARG BASE_IMAGE=tlog-base-ubuntu2404
 FROM ${BASE_IMAGE}
 
+# Compression tools for multi-format rotation tests (gzip in base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xz-utils bzip2 zstd && rm -rf /var/lib/apt/lists/*
+
 COPY files/ /opt/tlog_lib/files/
 COPY tests/ /opt/tlog_lib/tests/
 

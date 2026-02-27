@@ -1,6 +1,9 @@
 ARG BASE_IMAGE=tlog-base-rocky10
 FROM ${BASE_IMAGE}
 
+# Compression tools for multi-format rotation tests (gzip in base image)
+RUN dnf install -y xz bzip2 zstd && dnf clean all
+
 COPY files/ /opt/tlog_lib/files/
 COPY tests/ /opt/tlog_lib/tests/
 
