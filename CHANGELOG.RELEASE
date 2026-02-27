@@ -1,45 +1,32 @@
 - 2.0.1 | Feb 26 2026:
-  [New] tlog_lib.sh: shared library for incremental log file reading with
-      cursor-based position tracking
-  [New] Multi-mode tracking: byte-offset (tail -c) and line-count (tail -n)
-      modes selectable per call or via TLOG_MODE environment variable
-  [New] Atomic cursor writes via mktemp + mv -f; cursor never empty during
-      write operations
-  [New] Optional flock-based cursor locking via TLOG_FLOCK=1 with 5-second
-      timeout and structured exit code 4
-  [New] Cursor validation with regex check; corrupt cursors auto-reset with
-      exit code 2 and stderr warning
-  [New] Mode-aware cursor format: bare number (bytes), L:N prefix (lines);
-      mode mismatch detection with automatic reset
-  [New] Rotation-aware delta reads: .1 and .1.gz rotated file discovery with
-      bounds checking; .gz read via zcat pipe (never decompresses on disk)
-  [New] Configurable first-run behavior via TLOG_FIRST_RUN: skip (default)
-      outputs nothing, full outputs entire file
-  [New] Journal functions: tlog_journal_filter (registry-based lookup),
-      tlog_journal_register (service-to-filter registration primitive),
-      tlog_journal_read (cursor-based with timestamp fallback),
-      tlog_journal_read_full (no cursor, timeout support)
-  [Change] Replace tlog_journal_filter() hardcoded case statement with
-      indexed array registry; library contains zero project-specific
-      service names
-  [New] tlog_journal_register(name, filter): registration primitive for
-      consuming projects to define service-to-journalctl filter mappings
-  [Change] Journal filter registry uses parallel indexed arrays instead of
-      declare -A to avoid scope issues when sourced from inside functions
+  [New] tlog_lib.sh: shared Bash library for incremental log file reading
+      with cursor-based position tracking; multi-mode tracking (byte-offset
+      via tail -c, line-count via tail -n) selectable per call or TLOG_MODE
+      env; mode-aware cursor format (bare number = bytes, L:N = lines) with
+      automatic mismatch detection and reset; configurable first-run behavior
+      (TLOG_FIRST_RUN=skip|full); structured error codes 0-4; source guard
+      prevents double-sourcing
+  [New] Atomic cursor writes via mktemp + mv -f; optional flock-based
+      cursor locking (TLOG_FLOCK=1) with 5-second timeout; cursor validation
+      with regex check and auto-reset on corruption; stale cursor protection
+      via mtime touch on every tlog_read call
+  [New] Rotation-aware delta reads: .1 and .1.gz discovery with bounds
+      checking; .gz read via zcat pipe (read-only, never decompresses on disk)
+  [New] tlog_adjust_cursor(): mode-aware cursor subtraction for in-place
+      log trim with clamp-to-zero; tlog_advance_cursors(): fast-forward
+      multiple file and journal cursors from FILE|TAG pairs
+  [New] Journal support: registry-based filter system via parallel indexed
+      arrays (avoids declare -A scope issues); tlog_journal_register() for
+      consuming projects to define service-to-journalctl mappings;
+      tlog_journal_read() cursor-based with timestamp fallback;
+      tlog_journal_read_full() for scan mode with timeout support
+  [New] Standalone tlog CLI wrapper: sources tlog_lib.sh with security
+      check (root ownership, not world-writable); backward-compatible
+      argument parsing (file, tlog_name, optional mode); BASERUN
+      sed-replaced at install time for cursor storage security
   [New] BATS test suite: 74 tests covering both tracking modes, rotation,
-      cursor validation, flock locking, atomic writes, journal, standalone CLI
-  [New] Docker-based test infrastructure: Debian 12, Rocky 9, CentOS 6
-      targets with parallel execution support
-  [New] Cursor adjustment for log trim via tlog_adjust_cursor with mode
-      detection and clamp-to-zero
-  [New] Fast-forward multiple cursors via tlog_advance_cursors for file and
-      journal sources
-  [New] Stale protection: cursor mtime updated via touch on every tlog_read
-      call regardless of output
-  [New] Source guard via _TLOG_LIB_LOADED prevents double-sourcing
-  [New] Structured error codes: 0 (success), 1 (file/path error), 2 (cursor
-      corrupt), 3 (journal unavailable), 4 (lock failed)
-  [New] Standalone tlog wrapper: CLI script sourcing tlog_lib.sh with
-      backward-compatible argument parsing (file, tlog_name, optional mode)
-  [New] Security check on tlog_lib.sh before sourcing: ownership (root)
-      and permissions (not world-writable) validation
+      cursor validation, flock locking, atomic writes, journal, and
+      standalone CLI; Docker infrastructure for Debian 12, Rocky 9,
+      CentOS 6 with parallel execution
+  [New] README.md: public-facing documentation with platform support matrix,
+      API reference, security guidance for cursor storage, and usage examples
