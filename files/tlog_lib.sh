@@ -257,6 +257,12 @@ tlog_read() {
 	local cursor_corrupt=0 rc=0
 	local stored_mode parse_rc rt_delta
 
+	# Mode validation — reject typos before any I/O
+	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
+		echo "tlog: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
+		return 1
+	fi
+
 	# Journal dispatch: file missing and journal not disabled
 	if [[ ! -f "$file" ]] && [[ "${LOG_SOURCE}" != "file" ]]; then
 		tlog_journal_read "$tlog_name" "$baserun"

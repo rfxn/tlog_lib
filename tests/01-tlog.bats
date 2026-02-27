@@ -394,6 +394,14 @@ teardown() {
 	[[ "$status" -eq 1 ]]
 }
 
+@test "tlog_read: invalid mode returns exit 1" {
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "line"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid mode"* ]]
+	# Must not create a cursor file
+	[[ ! -f "$BASERUN/testlog" ]]
+}
+
 @test "tlog_read_full: missing file returns exit 1" {
 	run tlog_read_full "$TEST_TMPDIR/nonexistent"
 	[[ "$status" -eq 1 ]]

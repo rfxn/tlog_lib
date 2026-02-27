@@ -65,6 +65,9 @@
   [Fix] Cursor name path traversal: reject names containing '/' or equal
       to '.'/'..'; prevents --reset, --status, --adjust, and read from
       operating on files outside the BASERUN directory
-  [Fix] Tracking mode validation: reject invalid mode values (e.g., 'line'
-      instead of 'lines') in both -m flag and positional argument; prevents
-      silent cursor mismatch reset loop on typos
+  [Fix] Tracking mode validation in tlog CLI wrapper: reject invalid mode
+      values (e.g., 'line' instead of 'lines') in both -m flag and positional
+      argument; prevents silent cursor mismatch reset loop on typos
+  [Fix] Tracking mode validation in tlog_lib.sh: tlog_read() rejects invalid
+      mode strings before any I/O, returning exit 1 with descriptive error;
+      defense-in-depth for programmatic callers (BFD, LMD) beyond CLI
