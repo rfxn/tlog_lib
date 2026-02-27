@@ -30,3 +30,7 @@ tlog_lib CHANGELOG
   [New] Source guard via _TLOG_LIB_LOADED prevents double-sourcing
   [New] Structured error codes: 0 (success), 1 (file/path error), 2 (cursor
       corrupt), 3 (journal unavailable), 4 (lock failed)
+  [New] Standalone tlog wrapper: CLI script sourcing tlog_lib.sh with
+      backward-compatible argument parsing (file, tlog_name, optional mode)
+  [New] Security check on tlog_lib.sh before sourcing: ownership (root)
+      and permissions (not world-writable) validation

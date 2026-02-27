@@ -1,0 +1,70 @@
+#!/bin/bash
+# tlog — standalone CLI wrapper for tlog_lib.sh
+# Provides incremental log reading via command-line invocation.
+# Delegates all logic to tlog_lib.sh; this script handles argument
+# parsing, library location/validation, and BASERUN setup.
+#
+# Usage: tlog <file> <tlog_name> [mode]
+#   file      — log file to track
+#   tlog_name — cursor identifier (stored in BASERUN directory)
+#   mode      — tracking mode: bytes (default) or lines
+#
+# Copyright (C) 2002-2026 R-fx Networks <proj@rfxn.com>
+#                         Ryan MacDonald <ryan@rfxn.com>
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/local/sbin
+export PATH
+
+# BASERUN: cursor storage directory — sed-replaced at install time
+BASERUN="${BASERUN:-/tmp}"
+
+# Argument validation
+if [[ -z "$1" ]] || [[ -z "$2" ]]; then
+	echo "usage: tlog <file> <tlog_name> [mode]" >&2
+	exit 1
+fi
+
+FILE="$1"
+TLOG="$2"
+
+# Locate tlog_lib.sh relative to this script
+_SCRIPT_DIR="${0%/*}"
+[[ "$_SCRIPT_DIR" == "$0" ]] && _SCRIPT_DIR="."
+_LIB="${_SCRIPT_DIR}/tlog_lib.sh"
+
+if [[ ! -f "$_LIB" ]]; then
+	echo "tlog: library not found: $_LIB" >&2
+	exit 1
+fi
+
+# Security check: library must be root-owned and not world-writable
+_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null)
+_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null)
+_lib_world="${_lib_perms: -1}"
+if [[ "$_lib_owner" != "0" ]] || [[ $((_lib_world & 2)) -ne 0 ]]; then
+	echo "tlog: security check failed on $_LIB (owner=$_lib_owner perms=$_lib_perms)" >&2
+	exit 1
+fi
+
+# Source the library
+# shellcheck source=tlog_lib.sh
+. "$_LIB"
+
+# Validate BASERUN directory
+if [[ ! -d "$BASERUN" ]]; then
+	echo "tlog: baserun directory not found: $BASERUN" >&2
+	exit 1
+fi
+
+# Delegate to library
+tlog_read "$FILE" "$TLOG" "$BASERUN" "${3:-}"
+exit $?
