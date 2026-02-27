@@ -74,3 +74,9 @@ tlog_lib CHANGELOG
   [Fix] Tracking mode validation in tlog_lib.sh: tlog_read() rejects invalid
       mode strings before any I/O, returning exit 1 with descriptive error;
       defense-in-depth for programmatic callers (BFD, LMD) beyond CLI
+  [Fix] Shellcheck CI: replace incorrect source= directive with
+      disable=SC1090,SC1091 for dynamic library source path; resolves lint job
+      exit 1 on all CI runs
+  [Fix] CentOS 7 journal test: use nonexistent PATH instead of /usr/bin:/bin
+      to reliably hide journalctl on systemd systems; avoids POSIX empty-PATH
+      CWD-search edge case

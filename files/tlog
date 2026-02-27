@@ -268,7 +268,7 @@ if [[ "$_lib_owner" != "0" ]] || [[ $((_lib_world & 2)) -ne 0 ]]; then
 fi
 
 # Source the library
-# shellcheck source=tlog_lib.sh
+# shellcheck disable=SC1090,SC1091
 . "$_LIB"
 
 ###########################################################################

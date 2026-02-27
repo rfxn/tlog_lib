@@ -160,10 +160,10 @@ teardown() {
 }
 
 @test "tlog_journal_read: no journalctl returns exit 3" {
-	# Run in a subshell with restricted PATH that hides journalctl
+	# Run in a subshell with nonexistent PATH to ensure journalctl is unavailable
 	run bash -c '
 		unset _TLOG_LIB_LOADED
-		export PATH="/usr/bin:/bin"
+		export PATH="/nonexistent"
 		source "'"${PROJECT_ROOT}"'/files/tlog_lib.sh"
 		tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
 		tlog_journal_read "sshd" "'"$BASERUN"'"
