@@ -62,6 +62,9 @@ tlog_lib CHANGELOG
       cursor subtraction after in-place log trimming
   [New] --full subcommand: delegates to tlog_read_full() for cursorless
       full-file reads; does not require BASERUN
-  [New] Standalone CLI test expansion: 40 new tests (50 total) covering
-      help/version, option flags, all subcommands, error handling, and
-      false-positive verification
+  [New] Standalone CLI test expansion: 46 new tests (56 total) covering
+      help/version, option flags, all subcommands, error handling,
+      false-positive verification, and path traversal rejection
+  [Fix] Cursor name path traversal: reject names containing '/' or equal
+      to '.'/'..'; prevents --reset, --status, --adjust, and read from
+      operating on files outside the BASERUN directory

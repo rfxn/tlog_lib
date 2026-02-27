@@ -427,6 +427,51 @@ teardown() {
 }
 
 # ===================================================================
+# Path Traversal Rejection (6 tests)
+# ===================================================================
+
+@test "tlog: read rejects name with slash" {
+	run "$TLOG" "$LOGFILE" "../escape"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid cursor name"* ]]
+}
+
+@test "tlog: --reset rejects name with path traversal" {
+	# Ensure target file exists outside BASERUN to prove rm never runs
+	local target="$TEST_TMPDIR/victim"
+	touch "$target"
+	run "$TLOG" --reset "../victim"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid cursor name"* ]]
+	# File outside BASERUN must still exist
+	[[ -f "$target" ]]
+}
+
+@test "tlog: --status rejects name '..' " {
+	run "$TLOG" --status ".."
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid cursor name"* ]]
+}
+
+@test "tlog: --adjust rejects name with embedded slash" {
+	run "$TLOG" --adjust "sub/dir" 10
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid cursor name"* ]]
+}
+
+@test "tlog: rejects name '.'" {
+	run "$TLOG" "$LOGFILE" "."
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid cursor name"* ]]
+}
+
+@test "tlog: FP dotted names like 'digest.alert' are valid" {
+	run "$TLOG" "$LOGFILE" "digest.alert"
+	[[ "$status" -eq 0 ]]
+	[[ -f "$BASERUN/digest.alert" ]]
+}
+
+# ===================================================================
 # False-Positive Tests (3 tests)
 # ===================================================================
 

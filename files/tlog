@@ -295,12 +295,22 @@ if [[ -n "$_OPT_FIRST_RUN" ]]; then
 fi
 
 ###########################################################################
-# BASERUN validation helper
+# Validation helpers
 ###########################################################################
 
 _tlog_require_baserun() {
 	if [[ ! -d "$BASERUN" ]]; then
 		echo "tlog: baserun directory not found: $BASERUN" >&2
+		exit 1
+	fi
+}
+
+# Reject cursor names that could escape BASERUN via path traversal.
+# Names must be plain identifiers — no slashes, no . or .. components.
+_tlog_validate_name() {
+	local name="$1"
+	if [[ -z "$name" ]] || [[ "$name" == "." ]] || [[ "$name" == ".." ]] || [[ "$name" == *"/"* ]]; then
+		echo "tlog: invalid cursor name: '$name' (must not contain '/' or be '.'/'..') " >&2
 		exit 1
 	fi
 }
@@ -319,6 +329,7 @@ _tlog_cmd_status() {
 		exit 1
 	fi
 
+	_tlog_validate_name "$name"
 	_tlog_require_baserun
 
 	local cursor_file="$BASERUN/$name"
@@ -407,6 +418,7 @@ _tlog_cmd_reset() {
 		exit 1
 	fi
 
+	_tlog_validate_name "$name"
 	_tlog_require_baserun
 
 	local found=0
@@ -461,6 +473,7 @@ case "$_CMD" in
 			exit 1
 		fi
 
+		_tlog_validate_name "${_ARGS[1]}"
 		_tlog_require_baserun
 
 		# 3rd positional arg overrides -m flag (matches library priority)
@@ -498,6 +511,7 @@ case "$_CMD" in
 			exit 1
 		fi
 
+		_tlog_validate_name "${_ARGS[0]}"
 		_tlog_require_baserun
 
 		tlog_adjust_cursor "${_ARGS[0]}" "$BASERUN" "${_ARGS[1]}"
