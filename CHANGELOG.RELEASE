@@ -30,3 +30,9 @@
       CentOS 6 with parallel execution
   [New] README.md: public-facing documentation with platform support matrix,
       API reference, security guidance for cursor storage, and usage examples
+  [Change] Migrate test infrastructure to batsman shared framework via git
+      submodule at tests/infra/; thin project-layer Dockerfiles for 9 OS
+      targets (debian12, centos6, centos7, rocky8, rocky9, rocky10,
+      ubuntu1204, ubuntu2004, ubuntu2404); batsman-driven orchestration
+      replaces custom run-tests.sh and Makefile; GitHub Actions CI via
+      batsman reusable workflow

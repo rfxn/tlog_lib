@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=tlog-base-centos6
+ARG BASE_IMAGE=tlog-base-ubuntu2004
 FROM ${BASE_IMAGE}
 
 COPY files/ /opt/tlog_lib/files/

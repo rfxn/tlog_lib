@@ -1,35 +1,11 @@
-FROM debian:12-slim
+ARG BASE_IMAGE=tlog-base-debian12
+FROM ${BASE_IMAGE}
 
-ENV DEBIAN_FRONTEND=noninteractive
+# tlog_lib needs no additional packages — batsman base provides
+# coreutils, util-linux (flock), gzip (zcat), and all POSIX primitives.
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    coreutils \
-    sed \
-    grep \
-    gzip \
-    util-linux \
-    procps \
-    wget \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install bats and helpers from tarballs
-RUN mkdir -p /opt/bats && \
-    wget -qO- https://github.com/bats-core/bats-core/archive/refs/tags/v1.11.0.tar.gz | \
-      tar xz -C /opt/bats --strip-components=1 && \
-    /opt/bats/install.sh /usr/local && \
-    mkdir -p /usr/local/lib/bats/bats-support && \
-    wget -qO- https://github.com/bats-core/bats-support/archive/refs/tags/v0.3.0.tar.gz | \
-      tar xz -C /usr/local/lib/bats/bats-support --strip-components=1 && \
-    mkdir -p /usr/local/lib/bats/bats-assert && \
-    wget -qO- https://github.com/bats-core/bats-assert/archive/refs/tags/v2.1.0.tar.gz | \
-      tar xz -C /usr/local/lib/bats/bats-assert --strip-components=1
-
-# Copy tlog_lib source and tests
 COPY files/ /opt/tlog_lib/files/
 COPY tests/ /opt/tlog_lib/tests/
 
 WORKDIR /opt/tlog_lib/tests
-
-# Default: run all tests with tap formatter
 CMD ["bats", "--formatter", "tap", "/opt/tlog_lib/tests/"]
