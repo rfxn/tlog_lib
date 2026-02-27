@@ -1,0 +1,29 @@
+- 2.0.1 | Feb 26 2026:
+  [New] tlog_lib.sh: shared library for incremental log file reading with
+      cursor-based position tracking
+  [New] Multi-mode tracking: byte-offset (tail -c) and line-count (tail -n)
+      modes selectable per call or via TLOG_MODE environment variable
+  [New] Atomic cursor writes via mktemp + mv -f; cursor never empty during
+      write operations
+  [New] Optional flock-based cursor locking via TLOG_FLOCK=1 with 5-second
+      timeout and structured exit code 4
+  [New] Cursor validation with regex check; corrupt cursors auto-reset with
+      exit code 2 and stderr warning
+  [New] Mode-aware cursor format: bare number (bytes), L:N prefix (lines);
+      mode mismatch detection with automatic reset
+  [New] Rotation-aware delta reads: .1 and .1.gz rotated file discovery with
+      bounds checking; .gz read via zcat pipe (never decompresses on disk)
+  [New] Configurable first-run behavior via TLOG_FIRST_RUN: skip (default)
+      outputs nothing, full outputs entire file
+  [New] Journal functions: tlog_journal_filter (23 service mappings),
+      tlog_journal_read (cursor-based with timestamp fallback),
+      tlog_journal_read_full (no cursor, timeout support)
+  [New] Cursor adjustment for log trim via tlog_adjust_cursor with mode
+      detection and clamp-to-zero
+  [New] Fast-forward multiple cursors via tlog_advance_cursors for file and
+      journal sources
+  [New] Stale protection: cursor mtime updated via touch on every tlog_read
+      call regardless of output
+  [New] Source guard via _TLOG_LIB_LOADED prevents double-sourcing
+  [New] Structured error codes: 0 (success), 1 (file/path error), 2 (cursor
+      corrupt), 3 (journal unavailable), 4 (lock failed)
