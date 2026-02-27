@@ -465,6 +465,18 @@ teardown() {
 	[[ "$output" == *"invalid cursor name"* ]]
 }
 
+@test "tlog: -m with invalid mode exits 1" {
+	run "$TLOG" -m line "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid mode"* ]]
+}
+
+@test "tlog: positional mode typo exits 1" {
+	run "$TLOG" "$LOGFILE" "testlog" "byte"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid mode"* ]]
+}
+
 @test "tlog: FP dotted names like 'digest.alert' are valid" {
 	run "$TLOG" "$LOGFILE" "digest.alert"
 	[[ "$status" -eq 0 ]]

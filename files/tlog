@@ -280,6 +280,10 @@ if [[ -n "$_OPT_BASERUN" ]]; then
 fi
 
 if [[ -n "$_OPT_MODE" ]]; then
+	if [[ "$_OPT_MODE" != "bytes" ]] && [[ "$_OPT_MODE" != "lines" ]]; then
+		echo "tlog: invalid mode '$_OPT_MODE' (must be 'bytes' or 'lines')" >&2
+		exit 1
+	fi
 	TLOG_MODE="$_OPT_MODE"
 	export TLOG_MODE
 fi
@@ -478,6 +482,10 @@ case "$_CMD" in
 
 		# 3rd positional arg overrides -m flag (matches library priority)
 		if [[ -n "${_ARGS[2]:-}" ]]; then
+			if [[ "${_ARGS[2]}" != "bytes" ]] && [[ "${_ARGS[2]}" != "lines" ]]; then
+				echo "tlog: invalid mode '${_ARGS[2]}' (must be 'bytes' or 'lines')" >&2
+				exit 1
+			fi
 			tlog_read "${_ARGS[0]}" "${_ARGS[1]}" "$BASERUN" "${_ARGS[2]}"
 		else
 			tlog_read "${_ARGS[0]}" "${_ARGS[1]}" "$BASERUN" "${TLOG_MODE:-bytes}"
