@@ -5,7 +5,7 @@ FROM ${BASE_IMAGE}
 RUN yum install -y xz bzip2 && yum clean all
 
 COPY files/ /opt/tlog_lib/files/
-COPY tests/ /opt/tlog_lib/tests/
+COPY tests/ /opt/tests/
 
-WORKDIR /opt/tlog_lib/tests
-CMD ["bats", "--formatter", "tap", "/opt/tlog_lib/tests/"]
+WORKDIR /opt/tests
+CMD ["bats", "--formatter", "tap", "/opt/tests/"]

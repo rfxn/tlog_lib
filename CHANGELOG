@@ -2,6 +2,9 @@ tlog_lib CHANGELOG
 ==================
 
 - 2.0.1 | Feb 27 2026:
+  [Change] Standardize container test path from /opt/tlog_lib/tests to
+      /opt/tests — aligns with batsman default, eliminates need for
+      test-path CI override
   [New] tlog_lib.sh: shared Bash library for incremental log file reading
       with cursor-based position tracking; multi-mode tracking (byte-offset
       via tail -c, line-count via tail -n) selectable per call or TLOG_MODE

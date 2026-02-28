@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils bzip2 zstd && rm -rf /var/lib/apt/lists/*
 
 COPY files/ /opt/tlog_lib/files/
-COPY tests/ /opt/tlog_lib/tests/
+COPY tests/ /opt/tests/
 
-WORKDIR /opt/tlog_lib/tests
-CMD ["bats", "--formatter", "tap", "/opt/tlog_lib/tests/"]
+WORKDIR /opt/tests
+CMD ["bats", "--formatter", "tap", "/opt/tests/"]

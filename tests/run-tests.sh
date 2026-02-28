@@ -20,7 +20,7 @@ BATSMAN_DOCKER_FLAGS=""
 # shellcheck disable=SC2034
 BATSMAN_DEFAULT_OS="debian12"
 # shellcheck disable=SC2034
-BATSMAN_CONTAINER_TEST_PATH="/opt/tlog_lib/tests"
+BATSMAN_CONTAINER_TEST_PATH="/opt/tests"
 # shellcheck disable=SC2034
 BATSMAN_SUPPORTED_OS="debian12 centos6 centos7 rocky8 rocky9 rocky10 ubuntu1204 ubuntu2004 ubuntu2404"
 
