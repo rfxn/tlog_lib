@@ -4,7 +4,7 @@ FROM ${BASE_IMAGE}
 # Compression tools for multi-format rotation tests (gzip in base image)
 RUN dnf install -y xz bzip2 zstd && dnf clean all
 
-COPY files/ /opt/tlog_lib/files/
+COPY files/ /opt/files/
 COPY tests/ /opt/tests/
 
 WORKDIR /opt/tests

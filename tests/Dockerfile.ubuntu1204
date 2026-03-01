@@ -4,7 +4,7 @@ FROM ${BASE_IMAGE}
 # Compression tools for multi-format rotation tests (gzip in base image; no zstd on 12.04)
 RUN apt-get update && apt-get install -y xz-utils bzip2 && rm -rf /var/lib/apt/lists/*
 
-COPY files/ /opt/tlog_lib/files/
+COPY files/ /opt/files/
 COPY tests/ /opt/tests/
 
 WORKDIR /opt/tests

@@ -4,7 +4,7 @@ FROM ${BASE_IMAGE}
 # Compression tools for multi-format rotation tests (gzip in base image)
 RUN microdnf install -y xz bzip2 zstd && microdnf clean all
 
-COPY files/ /opt/tlog_lib/files/
+COPY files/ /opt/files/
 COPY tests/ /opt/tests/
 
 WORKDIR /opt/tests

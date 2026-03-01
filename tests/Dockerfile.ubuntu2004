@@ -5,7 +5,7 @@ FROM ${BASE_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils bzip2 zstd && rm -rf /var/lib/apt/lists/*
 
-COPY files/ /opt/tlog_lib/files/
+COPY files/ /opt/files/
 COPY tests/ /opt/tests/
 
 WORKDIR /opt/tests
