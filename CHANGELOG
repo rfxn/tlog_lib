@@ -16,6 +16,16 @@ tlog_lib CHANGELOG
       missing baserun in tlog_advance_cursors, world-writable baserun warning
       (library, journal, CLI), and non-world-writable false-positive (F-010,
       F-019)
+  [Change] _tlog_write_cursor() emits stderr warning on mktemp or rename
+      failure; previously failed silently making cursor write issues invisible
+      at all 12 call sites (F-007)
+  [New] tlog_journal_read() flock support: optional cursor locking via
+      TLOG_FLOCK=1; acquires lock after filter lookup, releases before both
+      return paths; returns exit 4 on lock contention; uses same exec {fd}>
+      pattern as tlog_read() (F-008)
+  [New] BATS tests: 6 new tests for cursor write failure warnings (mktemp
+      failure, tlog_read resilience), journal flock (lock creation, contention
+      exit 4, disabled no-lock, cursor unchanged on lock failure) (F-007, F-008)
   [Change] CI test matrix now requires lint job to pass before running tests;
       prevents wasted CI minutes on syntactically invalid code (F-046)
   [Change] CLI --first-run flag validates value (must be 'skip' or 'full');

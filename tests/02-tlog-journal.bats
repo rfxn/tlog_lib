@@ -375,6 +375,54 @@ teardown() {
 }
 
 # ===================================================================
+# Journal Flock (4 tests, F-008)
+# ===================================================================
+
+@test "tlog_journal_read: TLOG_FLOCK=1 creates .lock file (F-008)" {
+	TLOG_FLOCK="1"
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	[[ -f "$BASERUN/sshd.lock" ]]
+}
+
+@test "tlog_journal_read: TLOG_FLOCK=1 with lock held returns exit 4 (F-008)" {
+	TLOG_FLOCK="1"
+	# First run to create cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	# Hold lock in background
+	flock -x "$BASERUN/sshd.lock" -c 'sleep 30' &
+	FLOCK_PID=$!
+	sleep 0.5
+	# Attempt journal read with lock held
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 4 ]]
+}
+
+@test "FP: tlog_journal_read: TLOG_FLOCK=0 no .lock file (F-008)" {
+	TLOG_FLOCK="0"
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	[[ ! -f "$BASERUN/sshd.lock" ]]
+}
+
+@test "FP: tlog_journal_read: lock held does not modify cursor (F-008)" {
+	TLOG_FLOCK="1"
+	# First run to create cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	local cursor_before
+	read -r cursor_before < "$BASERUN/sshd"
+	# Hold lock
+	flock -x "$BASERUN/sshd.lock" -c 'sleep 30' &
+	FLOCK_PID=$!
+	sleep 0.5
+	# Attempt read — should fail with exit 4
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 4 ]]
+	# Cursor must be unchanged
+	local cursor_after
+	read -r cursor_after < "$BASERUN/sshd"
+	[[ "$cursor_before" == "$cursor_after" ]]
+}
+
+# ===================================================================
 # Journal Content Validation (4 tests)
 # ===================================================================
 

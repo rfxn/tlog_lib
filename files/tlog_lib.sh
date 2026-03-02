@@ -128,10 +128,14 @@ _tlog_write_cursor() {
 		*)     formatted="$value" ;;
 	esac
 
-	tmp_file=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || return 1
+	tmp_file=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || {
+		echo "tlog: warning: cursor write failed for $tlog_name (mktemp)" >&2
+		return 1
+	}
 	printf '%s\n' "$formatted" > "$tmp_file"
 
 	if ! mv -f "$tmp_file" "$cursor_file"; then
+		echo "tlog: warning: cursor write failed for $tlog_name (rename)" >&2
 		rm -f "$tmp_file"
 		return 1
 	fi
@@ -552,13 +556,14 @@ tlog_journal_filter() {
 # tlog_journal_read(tlog_name, baserun)
 # Cursor-based journal reader with timestamp fallback.
 # First run: capture cursor, output nothing.
-# Returns: 0=success, 1=unknown service, 3=journal unavailable.
+# Returns: 0=success, 1=unknown service/path error, 3=journal unavailable,
+#          4=lock acquisition failed (TLOG_FLOCK=1 only).
 tlog_journal_read() {
 	local tlog_name="$1" baserun="$2"
 	local cursor_file="$baserun/$tlog_name"
 	local jts_file="$baserun/${tlog_name}.jts"
 	local jfilter stored_cursor stored_jts new_cursor new_jts
-	local output_data
+	local output_data _tlog_fd
 
 	# Name validation — reject path traversal
 	_tlog_validate_name "$tlog_name" || return 1
@@ -577,6 +582,15 @@ tlog_journal_read() {
 
 	# Get filter for this service
 	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
+
+	# Optional flock — protect journal cursor operations (F-008)
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>"$baserun/${tlog_name}.lock"
+		if ! flock -x -w 5 "$_tlog_fd"; then
+			exec {_tlog_fd}>&-
+			return 4
+		fi
+	fi
 
 	# Read stored cursor
 	stored_cursor=""
@@ -618,6 +632,10 @@ tlog_journal_read() {
 		_tlog_write_cursor "${tlog_name}.jts" "$baserun" "$new_jts" "raw"
 
 		touch "$baserun/$tlog_name"
+		# Release lock
+		if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+			exec {_tlog_fd}>&-
+		fi
 		return 0
 	fi
 
@@ -656,6 +674,11 @@ tlog_journal_read() {
 
 	# Stale protection
 	touch "$baserun/$tlog_name"
+
+	# Release lock
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>&-
+	fi
 
 	return 0
 }

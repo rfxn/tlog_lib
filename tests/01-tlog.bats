@@ -620,6 +620,37 @@ teardown() {
 }
 
 # ===================================================================
+# Cursor Write Warnings (2 tests, F-007)
+# ===================================================================
+
+@test "_tlog_write_cursor: warns on mktemp failure (F-007)" {
+	# Use a nonexistent subdirectory so mktemp cannot create temp file
+	run _tlog_write_cursor "testlog" "$TEST_TMPDIR/nonexistent_subdir" "100" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"cursor write failed"* ]]
+	[[ "$output" == *"mktemp"* ]]
+}
+
+@test "tlog_read: cursor write failure does not crash, content still output (F-007)" {
+	# First run to set up cursor normally
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Append content
+	printf 'line four\n' >> "$LOGFILE"
+	# Create mock mktemp that always fails — put ahead of real mktemp in PATH
+	local mock_bin="$TEST_TMPDIR/mock_mktemp"
+	mkdir -p "$mock_bin"
+	printf '#!/bin/bash\nexit 1\n' > "$mock_bin/mktemp"
+	chmod +x "$mock_bin/mktemp"
+	# tlog_read outputs content BEFORE attempting cursor write
+	PATH="$mock_bin:$PATH" run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# Content still output despite cursor write failure
+	[[ "$output" == *"line four"* ]]
+	# Warning emitted on stderr (captured by run)
+	[[ "$output" == *"cursor write failed"* ]]
+}
+
+# ===================================================================
 # Stale Protection (1 test)
 # ===================================================================
 
