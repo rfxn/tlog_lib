@@ -107,13 +107,13 @@ teardown() {
 @test "tlog: -v shows version and exits 0" {
 	run "$TLOG" -v
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.1"* ]]
+	[[ "$output" == *"tlog 2.0.2"* ]]
 }
 
 @test "tlog: --version shows version and exits 0" {
 	run "$TLOG" --version
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.1"* ]]
+	[[ "$output" == *"tlog 2.0.2"* ]]
 	[[ "$output" == *"Copyright"* ]]
 }
 
@@ -142,7 +142,7 @@ teardown() {
 	mv "${lib_path}.hidden" "$lib_path"
 	rm -f "$lib_backup"
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.1"* ]]
+	[[ "$output" == *"tlog 2.0.2"* ]]
 }
 
 # ===================================================================

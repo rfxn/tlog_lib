@@ -20,14 +20,14 @@ teardown() {
 # Version & Source Guard (2 tests)
 # ===================================================================
 
-@test "TLOG_LIB_VERSION is set and matches 2.0.1" {
-	[[ "$TLOG_LIB_VERSION" == "2.0.1" ]]
+@test "TLOG_LIB_VERSION is set and matches 2.0.2" {
+	[[ "$TLOG_LIB_VERSION" == "2.0.2" ]]
 }
 
 @test "source guard prevents double-sourcing side effects" {
 	# Sourcing again should be harmless (source guard returns 0)
 	source "${PROJECT_ROOT}/files/tlog_lib.sh"
-	[[ "$TLOG_LIB_VERSION" == "2.0.1" ]]
+	[[ "$TLOG_LIB_VERSION" == "2.0.2" ]]
 }
 
 # ===================================================================
