@@ -10,6 +10,12 @@ tlog_lib CHANGELOG
       removes duplicated stat/wc -c logic (F-027)
   [Change] _tlog_parse_cursor() header comment documents out-parameters
       (_tlog_cursor_value, _tlog_cursor_mode) and return codes (F-023)
+  [Change] _tlog_write_cursor() case statement: add explicit bytes) branch
+      and invalid-mode error path (was silently handled by wildcard); all 12
+      existing call sites safe — defense-in-depth only (F-020)
+  [New] BATS tests: 3 new tests for _tlog_write_cursor explicit bytes mode,
+      invalid mode rejection (exit 1 + warning), and false-positive cursor
+      non-creation on invalid mode (F-020)
   [Fix] Baserun directory validated before journal dispatch in tlog_read() —
       prevents journal attempt when baserun is missing (F-010)
   [Fix] tlog_advance_cursors() now validates baserun directory before

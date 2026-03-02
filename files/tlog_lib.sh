@@ -127,9 +127,13 @@ _tlog_write_cursor() {
 	local tmp_file formatted
 
 	case "$mode" in
+		bytes) formatted="$value" ;;
 		lines) formatted="L:${value}" ;;
 		raw)   formatted="$value" ;;
-		*)     formatted="$value" ;;
+		*)
+			echo "tlog: warning: _tlog_write_cursor: invalid mode '$mode' for $tlog_name" >&2
+			return 1
+			;;
 	esac
 
 	tmp_file=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || {

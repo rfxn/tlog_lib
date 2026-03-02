@@ -651,6 +651,33 @@ teardown() {
 }
 
 # ===================================================================
+# Cursor Write Mode Handling (3 tests, F-020)
+# ===================================================================
+
+@test "_tlog_write_cursor: explicit bytes mode writes bare number (F-020)" {
+	_tlog_write_cursor "testlog" "$BASERUN" "12345" "bytes"
+	local cursor
+	read -r cursor < "$BASERUN/testlog"
+	[[ "$cursor" == "12345" ]]
+	# FP: no L: prefix
+	[[ "$cursor" != L:* ]]
+}
+
+@test "_tlog_write_cursor: invalid mode returns exit 1 with warning (F-020)" {
+	run _tlog_write_cursor "testlog" "$BASERUN" "100" "invalid_mode"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid mode"* ]]
+	[[ "$output" == *"invalid_mode"* ]]
+}
+
+@test "FP: _tlog_write_cursor: invalid mode does not create cursor file (F-020)" {
+	run _tlog_write_cursor "testlog" "$BASERUN" "100" "invalid_mode"
+	[[ "$status" -eq 1 ]]
+	# No cursor file should be created
+	[[ ! -f "$BASERUN/testlog" ]]
+}
+
+# ===================================================================
 # Stale Protection (1 test)
 # ===================================================================
 
