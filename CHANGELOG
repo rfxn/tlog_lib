@@ -16,6 +16,12 @@ tlog_lib CHANGELOG
   [New] BATS tests: 3 new tests for _tlog_write_cursor explicit bytes mode,
       invalid mode rejection (exit 1 + warning), and false-positive cursor
       non-creation on invalid mode (F-020)
+  [Change] Extract _tlog_journal_get_cursor() helper: centralizes identical
+      journal cursor capture pipeline (journalctl --show-cursor | grep | sed)
+      used at 3 call sites into single function; SC2086 directive centralized
+      in helper (F-024)
+  [New] BATS tests: 2 new tests for _tlog_journal_get_cursor helper — cursor
+      string return and empty-when-no-cursor-line (F-024)
   [Fix] Baserun directory validated before journal dispatch in tlog_read() —
       prevents journal attempt when baserun is missing (F-010)
   [Fix] tlog_advance_cursors() now validates baserun directory before

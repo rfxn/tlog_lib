@@ -126,6 +126,29 @@ teardown() {
 }
 
 # ===================================================================
+# _tlog_journal_get_cursor Helper (2 tests, F-024)
+# ===================================================================
+
+@test "_tlog_journal_get_cursor: returns cursor string (F-024)" {
+	local result
+	result=$(_tlog_journal_get_cursor "SYSLOG_IDENTIFIER=sshd")
+	[[ "$result" == "s=test_cursor_abc123" ]]
+}
+
+@test "_tlog_journal_get_cursor: empty when no cursor line (F-024)" {
+	# Override mock to return no cursor line
+	cat > "$MOCK_BIN/journalctl" <<'MOCKEOF'
+#!/bin/bash
+echo "-- no cursor here"
+exit 0
+MOCKEOF
+	chmod +x "$MOCK_BIN/journalctl"
+	local result
+	result=$(_tlog_journal_get_cursor "SYSLOG_IDENTIFIER=sshd")
+	[[ -z "$result" ]]
+}
+
+# ===================================================================
 # Journal Read (7 tests)
 # ===================================================================
 

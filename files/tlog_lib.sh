@@ -519,9 +519,7 @@ tlog_advance_cursors() {
 		elif [[ "$have_journalctl" -eq 1 ]]; then
 			jfilter=$(tlog_journal_filter "$tag") || continue
 			# Journal cursor: capture current per-service position
-			# $jfilter intentionally unquoted: multi-token filters require word-splitting
-			# shellcheck disable=SC2086
-			cursor_line=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+			cursor_line=$(_tlog_journal_get_cursor "$jfilter")
 			if [[ -n "$cursor_line" ]]; then
 				_tlog_write_cursor "$tag" "$baserun" "$cursor_line" "raw"
 				_tlog_write_cursor "${tag}.jts" "$baserun" "$(date +%s)" "raw"
@@ -535,6 +533,17 @@ tlog_advance_cursors() {
 ###########################################################################
 # Journal functions
 ###########################################################################
+
+# _tlog_journal_get_cursor(jfilter)
+# Capture current journal cursor position for the given filter.
+# Outputs cursor string on stdout, or nothing if unavailable.
+# $jfilter intentionally unquoted: multi-token filters require word-splitting.
+_tlog_journal_get_cursor() {
+	local jfilter="$1"
+	# shellcheck disable=SC2086
+	journalctl $jfilter -n 0 --show-cursor 2>/dev/null \
+		| grep -E '^-- cursor:' | sed 's/^-- cursor: //'
+}
 
 # tlog_journal_register(tlog_name, jfilter)
 # Register a service-to-journalctl filter mapping. Consuming projects
@@ -626,9 +635,7 @@ tlog_journal_read() {
 
 	# First run: capture position, output nothing
 	if [[ -z "$stored_cursor" ]] && [[ -z "$stored_jts" ]]; then
-		# $jfilter intentionally unquoted: multi-token filters require word-splitting
-		# shellcheck disable=SC2086
-		new_cursor=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+		new_cursor=$(_tlog_journal_get_cursor "$jfilter")
 		new_jts=$(date +%s)
 
 		if [[ -n "$new_cursor" ]]; then
@@ -667,9 +674,7 @@ tlog_journal_read() {
 	fi
 
 	# Capture new cursor + timestamp
-	# $jfilter intentionally unquoted: multi-token filters require word-splitting
-	# shellcheck disable=SC2086
-	new_cursor=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+	new_cursor=$(_tlog_journal_get_cursor "$jfilter")
 	new_jts=$(date +%s)
 
 	if [[ -n "$new_cursor" ]]; then
