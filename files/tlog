@@ -271,6 +271,12 @@ fi
 # shellcheck disable=SC1090,SC1091
 . "$_LIB"
 
+# Version cross-check: CLI wrapper and library must be from same release
+# shellcheck disable=SC2154
+if [[ "$TLOG_VERSION" != "$TLOG_LIB_VERSION" ]]; then
+	echo "tlog: warning: version mismatch (tlog=$TLOG_VERSION, lib=$TLOG_LIB_VERSION)" >&2
+fi
+
 ###########################################################################
 # Apply options to environment
 ###########################################################################

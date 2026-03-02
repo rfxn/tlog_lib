@@ -20,14 +20,21 @@ teardown() {
 # Version & Source Guard (2 tests)
 # ===================================================================
 
-@test "TLOG_LIB_VERSION is set and matches 2.0.2" {
-	[[ "$TLOG_LIB_VERSION" == "2.0.2" ]]
+@test "TLOG_LIB_VERSION is set and follows semver format" {
+	[[ -n "$TLOG_LIB_VERSION" ]]
+	local semver_pat='^[0-9]+\.[0-9]+\.[0-9]+$'
+	[[ "$TLOG_LIB_VERSION" =~ $semver_pat ]]
 }
 
 @test "source guard prevents double-sourcing side effects" {
-	# Sourcing again should be harmless (source guard returns 0)
+	# Register a mapping before re-sourcing — proves registry survives
+	tlog_journal_register "guard_test" "SYSLOG_IDENTIFIER=guard"
+	# Source again — guard should prevent re-execution (which would reset arrays)
 	source "${PROJECT_ROOT}/files/tlog_lib.sh"
-	[[ "$TLOG_LIB_VERSION" == "2.0.2" ]]
+	# Registry must still contain the mapping (not reset by re-sourcing)
+	local filter
+	filter=$(tlog_journal_filter "guard_test")
+	[[ "$filter" == "SYSLOG_IDENTIFIER=guard" ]]
 }
 
 # ===================================================================

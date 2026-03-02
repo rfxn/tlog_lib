@@ -1,4 +1,16 @@
 - 2.0.2 | Mar 02 2026:
+  [New] CLI version cross-check: standalone tlog warns on stderr when
+      TLOG_VERSION and TLOG_LIB_VERSION diverge after sourcing the library;
+      catches mismatched extraction or partial upgrade (F-050)
+  [Change] Test version assertions use dynamic EXPECTED_VERSION from sourced
+      library instead of hardcoded "2.0.2" strings; version bumps no longer
+      require test edits (F-049)
+  [Change] Source guard test now verifies journal registry survives re-sourcing
+      (was tautological — checked a static version string that would pass even
+      without the guard) (F-042)
+  [New] BATS tests: 5 new tests — CLI/library version cross-check (static
+      match + runtime mismatch warning + FP no-warning), security check
+      rejection of world-writable and non-root-owned library (F-050, F-043)
   [Change] Hoist numeric validation regex to library-scope _TLOG_NUMERIC_PAT;
       eliminates 5 identical local declarations across _tlog_parse_cursor,
       tlog_read_full, tlog_adjust_cursor, tlog_journal_read,

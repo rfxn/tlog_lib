@@ -534,12 +534,13 @@ make -C tests test-rocky9    # Rocky 9
 make -C tests test-all       # Full 9-OS matrix
 ```
 
-Tests run inside Docker containers via BATS. 180 tests cover both tracking
+Tests run inside Docker containers via BATS. 192 tests cover both tracking
 modes, rotation (including copytruncate and multi-format compression),
 cursor validation and corruption, flock locking, atomic writes, journal
-functions, and the standalone CLI wrapper (62 tests covering option
+functions, and the standalone CLI wrapper (68 tests covering option
 parsing, subcommands, help/version, false-positive verification, path
-traversal rejection, and mode validation).
+traversal rejection, mode validation, version cross-checks, and library
+security checks).
 
 ## License
 

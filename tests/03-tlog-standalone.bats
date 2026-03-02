@@ -107,13 +107,13 @@ teardown() {
 @test "tlog: -v shows version and exits 0" {
 	run "$TLOG" -v
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.2"* ]]
+	[[ "$output" == *"tlog $EXPECTED_VERSION"* ]]
 }
 
 @test "tlog: --version shows version and exits 0" {
 	run "$TLOG" --version
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.2"* ]]
+	[[ "$output" == *"tlog $EXPECTED_VERSION"* ]]
 	[[ "$output" == *"Copyright"* ]]
 }
 
@@ -142,7 +142,7 @@ teardown() {
 	mv "${lib_path}.hidden" "$lib_path"
 	rm -f "$lib_backup"
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.2"* ]]
+	[[ "$output" == *"tlog $EXPECTED_VERSION"* ]]
 }
 
 # ===================================================================
@@ -568,5 +568,66 @@ teardown() {
 	[[ -s "$stdout_file" ]]
 	# stderr should be empty
 	[[ ! -s "$stderr_file" ]]
+}
+
+# ===================================================================
+# Version Cross-Check (3 tests, F-050)
+# ===================================================================
+
+@test "tlog: CLI TLOG_VERSION matches library TLOG_LIB_VERSION (F-050)" {
+	local cli_version
+	cli_version=$(grep '^TLOG_VERSION=' "$TLOG" | head -1 | cut -d'"' -f2)
+	[[ "$cli_version" == "$TLOG_LIB_VERSION" ]]
+}
+
+@test "tlog: version mismatch between CLI and library warns (F-050)" {
+	local test_dir="$TEST_TMPDIR/ver_test"
+	mkdir -p "$test_dir"
+	cp "$TLOG" "$test_dir/tlog"
+	cp "${TLOG%/*}/tlog_lib.sh" "$test_dir/tlog_lib.sh"
+	chmod +x "$test_dir/tlog"
+	chmod 750 "$test_dir/tlog_lib.sh"
+	# Modify library version to create mismatch
+	sed -i 's/TLOG_LIB_VERSION="[^"]*"/TLOG_LIB_VERSION="0.0.0"/' "$test_dir/tlog_lib.sh"
+	run "$test_dir/tlog" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$output" == *"version mismatch"* ]]
+	[[ "$output" == *"tlog=$EXPECTED_VERSION"* ]]
+	[[ "$output" == *"lib=0.0.0"* ]]
+}
+
+@test "FP: tlog: matching versions produce no version warning (F-050)" {
+	run "$TLOG" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"version mismatch"* ]]
+}
+
+# ===================================================================
+# Library Security Check (2 tests, F-043)
+# ===================================================================
+
+@test "tlog: security check rejects world-writable library (F-043)" {
+	local test_dir="$TEST_TMPDIR/sec_test"
+	mkdir -p "$test_dir"
+	cp "$TLOG" "$test_dir/tlog"
+	cp "${TLOG%/*}/tlog_lib.sh" "$test_dir/tlog_lib.sh"
+	chmod +x "$test_dir/tlog"
+	# Make library world-writable — security check should reject
+	chmod 757 "$test_dir/tlog_lib.sh"
+	run "$test_dir/tlog" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"security check failed"* ]]
+}
+
+@test "tlog: security check rejects non-root-owned library (F-043)" {
+	local test_dir="$TEST_TMPDIR/sec_test"
+	mkdir -p "$test_dir"
+	cp "$TLOG" "$test_dir/tlog"
+	cp "${TLOG%/*}/tlog_lib.sh" "$test_dir/tlog_lib.sh"
+	chmod +x "$test_dir/tlog"
+	# Change library owner to non-root
+	chown 65534 "$test_dir/tlog_lib.sh"
+	run "$test_dir/tlog" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"security check failed"* ]]
 }
 

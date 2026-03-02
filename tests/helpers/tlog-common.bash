@@ -9,6 +9,10 @@ export PROJECT_ROOT
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/files/tlog_lib.sh"
 
+# Expected version from sourced library — tests use this instead of hardcoded strings (F-049)
+EXPECTED_VERSION="$TLOG_LIB_VERSION"
+export EXPECTED_VERSION
+
 # Load bats-support and bats-assert if available
 if [[ -d /usr/local/lib/bats/bats-support ]]; then
 	# shellcheck disable=SC1091
