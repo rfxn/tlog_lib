@@ -2,103 +2,70 @@ tlog_lib CHANGELOG
 ==================
 
 - 2.0.2 | Mar 02 2026:
-  [New] BATS tests: 4 new tests for remaining audit gaps — journal stale
-      protection mtime verification (F-039), non-numeric delta rejection in
-      tlog_adjust_cursor with false-positive arithmetic check (F-040),
-      lines-mode compressed rotation with .1.gz (F-041)
   [New] CLI version cross-check: standalone tlog warns on stderr when
       TLOG_VERSION and TLOG_LIB_VERSION diverge after sourcing the library;
       catches mismatched extraction or partial upgrade (F-050)
-  [Change] Test version assertions use dynamic EXPECTED_VERSION from sourced
-      library instead of hardcoded "2.0.2" strings; version bumps no longer
-      require test edits (F-049)
-  [Change] Source guard test now verifies journal registry survives re-sourcing
-      (was tautological — checked a static version string that would pass even
-      without the guard) (F-042)
-  [New] BATS tests: 5 new tests — CLI/library version cross-check (static
-      match + runtime mismatch warning + FP no-warning), security check
-      rejection of world-writable and non-root-owned library (F-050, F-043)
-  [Change] Hoist numeric validation regex to library-scope _TLOG_NUMERIC_PAT;
-      eliminates 5 identical local declarations across _tlog_parse_cursor,
-      tlog_read_full, tlog_adjust_cursor, tlog_journal_read,
-      tlog_journal_read_full (F-025)
-  [Change] _tlog_get_size() bytes branch delegates to tlog_get_file_size();
-      removes duplicated stat/wc -c logic (F-027)
-  [Change] _tlog_parse_cursor() header comment documents out-parameters
-      (_tlog_cursor_value, _tlog_cursor_mode) and return codes (F-023)
-  [Change] _tlog_write_cursor() case statement: add explicit bytes) branch
-      and invalid-mode error path (was silently handled by wildcard); all 12
-      existing call sites safe — defense-in-depth only (F-020)
-  [New] BATS tests: 3 new tests for _tlog_write_cursor explicit bytes mode,
-      invalid mode rejection (exit 1 + warning), and false-positive cursor
-      non-creation on invalid mode (F-020)
-  [Change] Extract _tlog_journal_get_cursor() helper: centralizes identical
-      journal cursor capture pipeline (journalctl --show-cursor | grep | sed)
-      used at 3 call sites into single function; SC2086 directive centralized
-      in helper (F-024)
-  [New] BATS tests: 2 new tests for _tlog_journal_get_cursor helper — cursor
-      string return and empty-when-no-cursor-line (F-024)
-  [Change] Extract _tlog_handle_rotation() helper: compressed files decompressed
-      once to temp file (was twice — once for size, once for content); reuses
-      _tlog_get_size/_tlog_output_content helpers; reduces tlog_read() rotation
-      block from 38 lines to 10 (F-021, F-022, F-026)
-  [Fix] --reset subcommand: add JTS orphan temp file cleanup glob
-      (.NAME.jts.XXXXXX) alongside existing cursor temp file glob; prevents
-      orphaned journal timestamp temp files from accumulating (F-051)
-  [New] BATS tests: 2 new tests — compressed rotation temp file cleanup
-      false-positive, --reset JTS orphan cleanup (F-021, F-051)
-  [Fix] Baserun directory validated before journal dispatch in tlog_read() —
-      prevents journal attempt when baserun is missing (F-010)
-  [Fix] tlog_advance_cursors() now validates baserun directory before
-      processing; returns exit 1 on missing baserun (F-010)
-  [Fix] tlog_journal_read() now validates baserun directory independently —
-      defense in depth for direct callers (F-010)
   [New] _tlog_check_baserun_perms() advisory helper: warns on stderr when
       baserun directory is world-writable; non-fatal (always returns 0);
       called from tlog_read(), tlog_journal_read(), tlog_advance_cursors()
       (F-019)
-  [New] BATS tests: 7 new tests for baserun validation before journal dispatch,
-      missing baserun in tlog_advance_cursors, world-writable baserun warning
-      (library, journal, CLI), and non-world-writable false-positive (F-010,
-      F-019)
-  [Change] _tlog_write_cursor() emits stderr warning on mktemp or rename
-      failure; previously failed silently making cursor write issues invisible
-      at all 12 call sites (F-007)
   [New] tlog_journal_read() flock support: optional cursor locking via
-      TLOG_FLOCK=1; acquires lock after filter lookup, releases before both
-      return paths; returns exit 4 on lock contention; uses same exec {fd}>
-      pattern as tlog_read() (F-008)
-  [New] BATS tests: 6 new tests for cursor write failure warnings (mktemp
-      failure, tlog_read resilience), journal flock (lock creation, contention
-      exit 4, disabled no-lock, cursor unchanged on lock failure) (F-007, F-008)
+      TLOG_FLOCK=1; returns exit 4 on lock contention; same pattern as
+      tlog_read() (F-008)
   [New] CLI /tmp warning: when running as root with BASERUN=/tmp, emits
       advisory warning directing user to set -b/--baserun or BASERUN env;
       gated on cursor-using commands only (--full excluded); complements
       library-level world-writable detection (F-033)
-  [New] BATS tests: 3 new tests for CLI /tmp warning (root warning, --full
-      excluded, custom -b suppression) (F-033)
-  [Change] CI test matrix now requires lint job to pass before running tests;
-      prevents wasted CI minutes on syntactically invalid code (F-046)
+  [Change] Extract _tlog_handle_rotation() helper: compressed files
+      decompressed once to temp file (was twice); reuses existing helpers;
+      consolidates rotation block in tlog_read() (F-021, F-022, F-026)
+  [Change] Extract _tlog_journal_get_cursor() helper: centralizes journal
+      cursor capture pipeline used at 3 call sites (F-024)
+  [Change] Hoist numeric validation regex to library-scope _TLOG_NUMERIC_PAT;
+      eliminates 5 identical local declarations (F-025)
+  [Change] _tlog_get_size() bytes branch delegates to tlog_get_file_size();
+      removes duplicated stat/wc -c logic (F-027)
+  [Change] _tlog_write_cursor() case statement: add explicit bytes) branch
+      and invalid-mode error path (was silently handled by wildcard); all 12
+      existing call sites safe — defense-in-depth only (F-020)
+  [Change] _tlog_write_cursor() emits stderr warning on mktemp or rename
+      failure; previously failed silently at all 12 call sites (F-007)
+  [Change] _tlog_parse_cursor() header comment documents out-parameters
+      (_tlog_cursor_value, _tlog_cursor_mode) and return codes (F-023)
   [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
       rejects typos with actionable error message, consistent with --mode
-      validation; BATS test added for invalid value (F-011)
+      validation (F-011)
+  [Change] Test version assertions use dynamic EXPECTED_VERSION from sourced
+      library instead of hardcoded strings; version bumps no longer require
+      test edits (F-049)
+  [Change] Source guard test now verifies journal registry survives
+      re-sourcing instead of checking a static version string (F-042)
+  [Change] CI test matrix now requires lint job to pass before running tests;
+      prevents wasted CI minutes on syntactically invalid code (F-046)
+  [Change] Remove 4 duplicate BATS tests from suite (133 to 129 before
+      2.0.2 additions) (F-032)
+  [Fix] Baserun directory validated before processing in tlog_read(),
+      tlog_journal_read(), and tlog_advance_cursors(); prevents journal
+      attempt or cursor operations on missing baserun (F-010)
   [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments in
-      tlog_read_full() and tlog_journal_read_full() — non-numeric values
-      default to 0 (no limit/no timeout) with stderr warning; prevents
-      silent wrong behavior from bash arithmetic coercion (F-002)
+      tlog_read_full() and tlog_journal_read_full(); non-numeric values
+      default to 0 with stderr warning (F-002)
   [Fix] --status subcommand: correctly display corrupt cursor state instead
       of showing "not initialized"; show raw cursor content for diagnosis
       (F-037)
-  [New] BATS tests: 9 new tests for arithmetic validation coverage —
-      tlog_read_full non-numeric max_lines (2 tests), tlog_journal_read_full
-      max_lines/timeout paths and non-numeric values (5 tests), --status
-      corrupt cursor display and false-positive (2 tests) (F-037, F-038)
-  [Change] Mock journalctl enhanced with -n flag detection for max_lines
-      limit testing
+  [Fix] --status long help: add exit code note — exits 0 even for corrupt
+      or uninitialized cursors (F-034)
+  [Fix] --reset subcommand: add JTS orphan temp file cleanup glob
+      (.NAME.jts.XXXXXX) alongside existing cursor temp file glob; prevents
+      orphaned journal timestamp temp files from accumulating (F-051)
   [Fix] CI lint step: add bash -n syntax checking and include
       tests/run-tests.sh in shellcheck scope (F-044, F-045)
-  [Change] Remove 4 duplicate BATS tests from suite (133 to 129 before
-      2.0.2 additions) (F-032)
+  [Fix] README: add return codes for tlog_journal_read (0, 1, 3, 4) and
+      tlog_journal_read_full (0, 1, 3) (F-052)
+  [New] BATS tests: 67 new tests (196 total) covering arithmetic validation,
+      cursor write failures, journal flock and stale protection, baserun
+      validation, world-writable and CLI /tmp warnings, version cross-check,
+      security checks, rotation refactoring, and remaining audit gaps
 
 - 2.0.1 | Mar 01 2026:
   [Fix] Library-level tlog_name path traversal validation in tlog_read,
