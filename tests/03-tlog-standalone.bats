@@ -427,6 +427,12 @@ teardown() {
 	[[ "$output" == *"requires"* ]]
 }
 
+@test "tlog: --first-run with invalid value exits 1" {
+	run "$TLOG" --first-run yes "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid first-run mode"* ]]
+}
+
 @test "tlog: BASERUN missing for --status exits 1" {
 	run env BASERUN="/nonexistent/path" "$TLOG" --status "testlog"
 	[[ "$status" -eq 1 ]]

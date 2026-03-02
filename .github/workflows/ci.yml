@@ -19,6 +19,7 @@ jobs:
         run: shellcheck files/tlog_lib.sh files/tlog tests/run-tests.sh
 
   test:
+    needs: lint
     uses: rfxn/batsman/.github/workflows/test.yml@v1.0.2
     with:
       project-name: tlog

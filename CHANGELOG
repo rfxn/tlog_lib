@@ -2,6 +2,11 @@ tlog_lib CHANGELOG
 ==================
 
 - 2.0.2 | Mar 02 2026:
+  [Change] CI test matrix now requires lint job to pass before running tests;
+      prevents wasted CI minutes on syntactically invalid code (F-046)
+  [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
+      rejects typos with actionable error message, consistent with --mode
+      validation; BATS test added for invalid value (F-011)
   [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments in
       tlog_read_full() and tlog_journal_read_full() — non-numeric values
       default to 0 (no limit/no timeout) with stderr warning; prevents

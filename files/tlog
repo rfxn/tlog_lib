@@ -294,6 +294,10 @@ if [[ -n "$_OPT_FLOCK" ]]; then
 fi
 
 if [[ -n "$_OPT_FIRST_RUN" ]]; then
+	if [[ "$_OPT_FIRST_RUN" != "skip" ]] && [[ "$_OPT_FIRST_RUN" != "full" ]]; then
+		echo "tlog: invalid first-run mode '$_OPT_FIRST_RUN' (must be 'skip' or 'full')" >&2
+		exit 1
+	fi
 	TLOG_FIRST_RUN="$_OPT_FIRST_RUN"
 	export TLOG_FIRST_RUN
 fi
