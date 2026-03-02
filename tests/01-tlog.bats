@@ -514,6 +514,24 @@ teardown() {
 	[[ "$output" == "$expected" ]]
 }
 
+@test "tlog_read_full: non-numeric max_lines defaults to full output" {
+	run tlog_read_full "$LOGFILE" "garbage"
+	[[ "$status" -eq 0 ]]
+	# Warning on stderr captured by run
+	[[ "$output" == *"invalid max_lines"* ]]
+	# Full file content output (fallback to cat)
+	[[ "$output" == *"line one"* ]]
+	[[ "$output" == *"line two"* ]]
+	[[ "$output" == *"line three"* ]]
+}
+
+@test "FP: tlog_read_full: non-numeric max_lines does not cause arithmetic errors" {
+	run tlog_read_full "$LOGFILE" "not-a-number"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"syntax error"* ]]
+	[[ "$output" != *"integer expression expected"* ]]
+}
+
 # ===================================================================
 # tlog_adjust_cursor (4 tests)
 # ===================================================================

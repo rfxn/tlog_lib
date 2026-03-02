@@ -401,9 +401,16 @@ tlog_read() {
 # max_lines > 0 → tail -n, else cat.
 tlog_read_full() {
 	local file="$1" max_lines="${2:-0}"
+	local numeric_pat='^[0-9]+$'
 
 	if [[ ! -f "$file" ]]; then
 		return 1
+	fi
+
+	# Validate max_lines is numeric — non-numeric defaults to 0 (full output)
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $numeric_pat ]]; then
+		echo "tlog: tlog_read_full: invalid max_lines: '$max_lines'" >&2
+		max_lines="0"
 	fi
 
 	if [[ "$max_lines" -gt 0 ]]; then
@@ -635,6 +642,19 @@ tlog_journal_read_full() {
 
 	# Name validation — reject path traversal
 	_tlog_validate_name "$tlog_name" || return 1
+
+	# Validate scan_timeout is numeric — non-numeric defaults to 0 (no timeout)
+	local numeric_pat='^[0-9]+$'
+	if [[ -n "$scan_timeout" ]] && [[ ! "$scan_timeout" =~ $numeric_pat ]]; then
+		echo "tlog: tlog_journal_read_full: invalid scan_timeout: '$scan_timeout'" >&2
+		scan_timeout="0"
+	fi
+
+	# Validate max_lines is numeric — non-numeric defaults to 0 (no limit)
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $numeric_pat ]]; then
+		echo "tlog: tlog_journal_read_full: invalid max_lines: '$max_lines'" >&2
+		max_lines="0"
+	fi
 
 	# Check journalctl available
 	if ! command -v journalctl >/dev/null 2>&1; then

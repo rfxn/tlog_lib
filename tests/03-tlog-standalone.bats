@@ -294,6 +294,23 @@ teardown() {
 	[[ "$before" == "$after" ]]
 }
 
+@test "tlog: --status with corrupt cursor shows corrupt state" {
+	printf 'garbage!!!\n' > "$BASERUN/testlog"
+	run "$TLOG" --status "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"state:  corrupt"* ]]
+}
+
+@test "tlog: FP --status with corrupt cursor does not modify cursor" {
+	printf 'garbage!!!\n' > "$BASERUN/testlog"
+	run "$TLOG" --status "testlog"
+	[[ "$status" -eq 0 ]]
+	# Cursor file must still contain the original garbage (read-only operation)
+	local cursor
+	read -r cursor < "$BASERUN/testlog"
+	[[ "$cursor" == "garbage!!!" ]]
+}
+
 # ===================================================================
 # --reset Subcommand (4 tests)
 # ===================================================================

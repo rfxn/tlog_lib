@@ -1,94 +1,14 @@
-- 2.0.1 | Mar 01 2026:
-  [Fix] Library-level tlog_name path traversal validation in tlog_read,
-      tlog_adjust_cursor, tlog_journal_read, tlog_journal_read_full, and
-      tlog_advance_cursors -- reject names containing '/' or equal to '.'/'..';
-      defense-in-depth alongside existing CLI validation (C-002)
-  [Fix] Journal cursor content validation: allowlist format check before
-      interpolation into --after-cursor argument; rejects shell metacharacters,
-      clears corrupt cursor to trigger timestamp fallback (C-003/F-014)
-  [Fix] Journal timestamp content validation: numeric-only check before
-      interpolation into --since=@ argument; clears corrupt value to trigger
-      first-run fallback (C-003/F-015)
-  [Change] Document intentional $jfilter unquoted expansion at all 8 SC2086
-      shellcheck directive sites with explanatory comments (F-016)
-  [New] BATS tests: 18 new tests for library-level name validation (positive,
-      false-positive, and security tests) and journal content validation
-      (cursor/timestamp format checks, corrupt data handling)
-  [Fix] tlog_advance_cursors: pass per-service journal filter to journalctl
-      --show-cursor instead of capturing global cursor position
-  [Fix] tlog_advance_cursors: validate TLOG_MODE before processing (matches
-      tlog_read pattern)
-  [Change] tlog_advance_cursors: hoist journalctl availability check outside
-      loop for efficiency
-  [New] BATS tests for tlog_advance_cursors journal branch (7 tests)
-
-- 2.0.1 | Feb 27 2026:
-  [Fix] Align Dockerfile files/ COPY path with test path: /opt/tlog_lib/files/
-      to /opt/files/ — test helper resolves PROJECT_ROOT from BATS_TEST_DIRNAME
-      parent, so files/ must be a sibling of tests/ under /opt
-  [Change] Standardize container test path from /opt/tlog_lib/tests to
-      /opt/tests — aligns with batsman default, eliminates need for
-      test-path CI override
-  [New] tlog_lib.sh: shared Bash library for incremental log file reading
-      with cursor-based position tracking; multi-mode tracking (byte-offset
-      via tail -c, line-count via tail -n) selectable per call or TLOG_MODE
-      env; mode-aware cursor format (bare number = bytes, L:N = lines) with
-      automatic mismatch detection and reset; configurable first-run behavior
-      (TLOG_FIRST_RUN=skip|full); structured error codes 0-4; source guard
-      prevents double-sourcing
-  [New] Atomic cursor writes via mktemp + mv -f; optional flock-based
-      cursor locking (TLOG_FLOCK=1) with 5-second timeout; cursor validation
-      with regex check and auto-reset on corruption; stale cursor protection
-      via mtime touch on every tlog_read call
-  [New] Rotation-aware delta reads: .1 and compressed variants (.1.gz,
-      .1.xz, .1.bz2, .1.zst, .1.lz4) with runtime tool availability check
-      via command -v; uncompressed .1 retains highest priority; compressed
-      files read via pipe (never decompressed on disk); generic decompression
-      dispatch via _tlog_is_compressed() and _tlog_cat_file(); supports both
-      create and copytruncate logrotate strategies
-  [New] tlog_adjust_cursor(): mode-aware cursor subtraction for in-place
-      log trim with clamp-to-zero; tlog_advance_cursors(): fast-forward
-      multiple file and journal cursors from FILE|TAG pairs
-  [New] Journal support: registry-based filter system via parallel indexed
-      arrays (avoids declare -A scope issues); tlog_journal_register() for
-      consuming projects to define service-to-journalctl mappings;
-      tlog_journal_read() cursor-based with timestamp fallback;
-      tlog_journal_read_full() for scan mode with timeout support
-  [New] Standalone tlog CLI wrapper: sources tlog_lib.sh with security
-      check (root ownership, not world-writable); option parsing (-m/--mode,
-      -b/--baserun, -f/--flock, --first-run); subcommands (--full, --status,
-      --reset, --adjust); version banner (-v/--version), short help (-h),
-      detailed help with examples (--help); full backward compatibility with
-      positional interface (file, tlog_name, optional mode) preserved;
-      BASERUN sed-replaced at install time for cursor storage security
-  [New] --status subcommand: display cursor state (path, mode, value, age),
-      optional file argument shows size and pending delta, reports .jts and
-      .lock presence; read-only — does not modify any files
-  [New] --reset subcommand: delete cursor, .jts, .lock, and orphaned temp
-      files; reports each deletion; always exits 0
-  [New] --adjust subcommand: delegates to tlog_adjust_cursor() for mode-aware
-      cursor subtraction after in-place log trimming
-  [New] --full subcommand: delegates to tlog_read_full() for cursorless
-      full-file reads; does not require BASERUN
-  [New] BATS test suite: 133 tests covering both tracking modes, rotation
-      (including copytruncate and multi-format compression), cursor validation,
-      flock locking, atomic writes, journal functions, and standalone CLI
-      (58 tests covering option parsing, subcommands, help/version,
-      false-positive verification, path traversal rejection, and mode
-      validation); Docker infrastructure via batsman shared framework with
-      9 OS targets; GitHub Actions CI via batsman reusable workflow
-  [New] README.md: public-facing documentation with platform support matrix,
-      API reference, security guidance for cursor storage, and usage examples
-  [Fix] Cursor name path traversal: reject names containing '/' or equal
-      to '.'/'..'; prevents --reset, --status, --adjust, and read from
-      operating on files outside the BASERUN directory
-  [Fix] Tracking mode validation: tlog_read() and standalone CLI wrapper
-      reject invalid mode strings (e.g., 'line' instead of 'lines') before
-      any I/O; prevents silent cursor mismatch reset loop on typos;
-      defense-in-depth across library and CLI layers
-  [Fix] Shellcheck CI: replace incorrect source= directive with
-      disable=SC1090,SC1091 for dynamic library source path; resolves lint job
-      exit 1 on all CI runs
-  [Fix] CentOS 7 journal test: use nonexistent PATH instead of /usr/bin:/bin
-      to reliably hide journalctl on systemd systems; avoids POSIX empty-PATH
-      CWD-search edge case
+- 2.0.2 | Mar 02 2026:
+  [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments in
+      tlog_read_full() and tlog_journal_read_full() — non-numeric values
+      default to 0 (no limit/no timeout) with stderr warning; prevents
+      silent wrong behavior from bash arithmetic coercion (F-002)
+  [Fix] --status subcommand: correctly display corrupt cursor state instead
+      of showing "not initialized"; show raw cursor content for diagnosis
+      (F-037)
+  [New] BATS tests: 9 new tests for arithmetic validation coverage —
+      tlog_read_full non-numeric max_lines (2 tests), tlog_journal_read_full
+      max_lines/timeout paths and non-numeric values (5 tests), --status
+      corrupt cursor display and false-positive (2 tests) (F-037, F-038)
+  [Change] Mock journalctl enhanced with -n flag detection for max_lines
+      limit testing

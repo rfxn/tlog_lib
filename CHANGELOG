@@ -1,6 +1,21 @@
 tlog_lib CHANGELOG
 ==================
 
+- 2.0.2 | Mar 02 2026:
+  [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments in
+      tlog_read_full() and tlog_journal_read_full() — non-numeric values
+      default to 0 (no limit/no timeout) with stderr warning; prevents
+      silent wrong behavior from bash arithmetic coercion (F-002)
+  [Fix] --status subcommand: correctly display corrupt cursor state instead
+      of showing "not initialized"; show raw cursor content for diagnosis
+      (F-037)
+  [New] BATS tests: 9 new tests for arithmetic validation coverage —
+      tlog_read_full non-numeric max_lines (2 tests), tlog_journal_read_full
+      max_lines/timeout paths and non-numeric values (5 tests), --status
+      corrupt cursor display and false-positive (2 tests) (F-037, F-038)
+  [Change] Mock journalctl enhanced with -n flag detection for max_lines
+      limit testing
+
 - 2.0.1 | Mar 01 2026:
   [Fix] Library-level tlog_name path traversal validation in tlog_read,
       tlog_adjust_cursor, tlog_journal_read, tlog_journal_read_full, and

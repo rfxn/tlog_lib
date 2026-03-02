@@ -344,16 +344,18 @@ _tlog_cmd_status() {
 	_tlog_parse_cursor "$name" "$BASERUN"
 	local parse_rc=$?
 
-	if [[ -z "$_tlog_cursor_value" ]]; then
+	if [[ $parse_rc -eq 2 ]]; then
+		# Corrupt cursor: show raw content for diagnosis
+		local raw_value=""
+		read -r raw_value < "$cursor_file" 2>/dev/null || true
+		printf 'raw:    %s\n' "$raw_value"
+		printf 'state:  corrupt (would auto-reset on next read)\n'
+	elif [[ -z "$_tlog_cursor_value" ]]; then
 		printf 'state:  not initialized\n'
 	else
 		printf 'mode:   %s\n' "$_tlog_cursor_mode"
 		printf 'value:  %s\n' "$_tlog_cursor_value"
-		if [[ $parse_rc -eq 2 ]]; then
-			printf 'state:  corrupt (would auto-reset on next read)\n'
-		else
-			printf 'state:  valid\n'
-		fi
+		printf 'state:  valid\n'
 
 		# Cursor age
 		if [[ -f "$cursor_file" ]]; then
