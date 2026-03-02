@@ -1,4 +1,8 @@
 - 2.0.2 | Mar 02 2026:
+  [New] BATS tests: 4 new tests for remaining audit gaps — journal stale
+      protection mtime verification (F-039), non-numeric delta rejection in
+      tlog_adjust_cursor with false-positive arithmetic check (F-040),
+      lines-mode compressed rotation with .1.gz (F-041)
   [New] CLI version cross-check: standalone tlog warns on stderr when
       TLOG_VERSION and TLOG_LIB_VERSION diverge after sourcing the library;
       catches mismatched extraction or partial upgrade (F-050)

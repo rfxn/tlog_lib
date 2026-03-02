@@ -498,6 +498,25 @@ MOCKEOF
 }
 
 # ===================================================================
+# Journal Stale Protection (1 test, F-039)
+# ===================================================================
+
+@test "tlog_journal_read: cursor mtime updated on subsequent read (F-039)" {
+	# First run to create cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	[[ -f "$BASERUN/sshd" ]]
+	local mtime_before
+	mtime_before=$(stat -c %Y "$BASERUN/sshd")
+	# Wait for filesystem mtime granularity
+	sleep 1
+	# Second run — stale protection should touch cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	local mtime_after
+	mtime_after=$(stat -c %Y "$BASERUN/sshd")
+	[[ "$mtime_after" -gt "$mtime_before" ]]
+}
+
+# ===================================================================
 # tlog_journal_read_full Coverage (5 tests — F-038)
 # ===================================================================
 

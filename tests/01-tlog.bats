@@ -322,6 +322,25 @@ teardown() {
 	[[ "$output" == *"new line one"* ]]
 }
 
+@test "tlog_read lines: rotation with .1.gz outputs via decompression (F-041)" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines" >/dev/null 2>&1
+	# Append lines and create compressed rotated file
+	printf 'line four\nline five\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new line one\nnew line two\n' > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines"
+	[[ "$status" -eq 0 ]]
+	# Output should contain remainder from rotated file + new file
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"line five"* ]]
+	[[ "$output" == *"new line one"* ]]
+	[[ "$output" == *"new line two"* ]]
+	# FP: compressed file must still exist on disk (no gunzip -d)
+	[[ -f "${LOGFILE}.1.gz" ]]
+}
+
 @test "tlog_read bytes: growth does not read from rotated files" {
 	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
 	# Growth path: append to current file
@@ -603,6 +622,25 @@ teardown() {
 	run tlog_adjust_cursor "testlog" "$BASERUN" "100"
 	[[ "$status" -eq 0 ]]
 	[[ ! -f "$BASERUN/testlog" ]]
+}
+
+@test "tlog_adjust_cursor: non-numeric delta returns exit 1 (F-040)" {
+	_tlog_write_cursor "testlog" "$BASERUN" "1000" "bytes"
+	run tlog_adjust_cursor "testlog" "$BASERUN" "not-a-number"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid delta"* ]]
+	# Cursor must be unchanged
+	local cursor
+	read -r cursor < "$BASERUN/testlog"
+	[[ "$cursor" == "1000" ]]
+}
+
+@test "FP: tlog_adjust_cursor: non-numeric delta does not cause arithmetic error (F-040)" {
+	_tlog_write_cursor "testlog" "$BASERUN" "500" "bytes"
+	run tlog_adjust_cursor "testlog" "$BASERUN" "abc"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" != *"syntax error"* ]]
+	[[ "$output" != *"integer expression expected"* ]]
 }
 
 # ===================================================================
