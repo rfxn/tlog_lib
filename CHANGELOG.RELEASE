@@ -1,3 +1,12 @@
+- 2.0.1 | Mar 01 2026:
+  [Fix] tlog_advance_cursors: pass per-service journal filter to journalctl
+      --show-cursor instead of capturing global cursor position
+  [Fix] tlog_advance_cursors: validate TLOG_MODE before processing (matches
+      tlog_read pattern)
+  [Change] tlog_advance_cursors: hoist journalctl availability check outside
+      loop for efficiency
+  [New] BATS tests for tlog_advance_cursors journal branch (7 tests)
+
 - 2.0.1 | Feb 27 2026:
   [Fix] Align Dockerfile files/ COPY path with test path: /opt/tlog_lib/files/
       to /opt/files/ — test helper resolves PROJECT_ROOT from BATS_TEST_DIRNAME

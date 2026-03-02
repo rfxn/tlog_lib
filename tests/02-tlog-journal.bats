@@ -226,3 +226,87 @@ teardown() {
 	run tlog_journal_read_full "unknown_service" 0 10
 	[[ "$status" -eq 1 ]]
 }
+
+# ===================================================================
+# tlog_advance_cursors journal branch (7 tests)
+# ===================================================================
+
+@test "tlog_advance_cursors: journal cursor created for missing file with registered tag" {
+	# File does not exist, but sshd is registered → journal dispatch
+	local pairs
+	pairs=$(printf '/nonexistent/fake.log|sshd')
+	tlog_advance_cursors "$BASERUN" "$pairs"
+	# Cursor file should contain journal cursor from mock
+	[[ -f "$BASERUN/sshd" ]]
+	local cursor
+	read -r cursor < "$BASERUN/sshd"
+	[[ "$cursor" == "s=test_cursor_abc123" ]]
+}
+
+@test "tlog_advance_cursors: jts timestamp created for journal tag" {
+	local pairs
+	pairs=$(printf '/nonexistent/fake.log|sshd')
+	tlog_advance_cursors "$BASERUN" "$pairs"
+	# .jts file should exist with epoch timestamp
+	[[ -f "$BASERUN/sshd.jts" ]]
+	local jts
+	read -r jts < "$BASERUN/sshd.jts"
+	local numeric_pat='^[0-9]+$'
+	[[ "$jts" =~ $numeric_pat ]]
+}
+
+@test "tlog_advance_cursors: unregistered tag skipped silently" {
+	local pairs
+	pairs=$(printf '/nonexistent/fake.log|unknown_service_xyz')
+	tlog_advance_cursors "$BASERUN" "$pairs"
+	# No cursor file for unregistered tag
+	[[ ! -f "$BASERUN/unknown_service_xyz" ]]
+}
+
+@test "tlog_advance_cursors: mixed file and journal pairs" {
+	# Create a real file for the file-cursor half of the test
+	local logfile="$TEST_TMPDIR/mixed.log"
+	printf 'line one\nline two\nline three\n' > "$logfile"
+	# log1 exists (file cursor), sshd does not exist (journal cursor)
+	local pairs
+	pairs=$(printf '%s|log1\n/nonexistent/fake.log|sshd' "$logfile")
+	tlog_advance_cursors "$BASERUN" "$pairs"
+	# File cursor: byte size
+	local c1
+	read -r c1 < "$BASERUN/log1"
+	local s1
+	s1=$(stat -c %s "$logfile")
+	[[ "$c1" == "$s1" ]]
+	# Journal cursor: mock cursor string
+	local c2
+	read -r c2 < "$BASERUN/sshd"
+	[[ "$c2" == "s=test_cursor_abc123" ]]
+}
+
+@test "tlog_advance_cursors: invalid mode returns exit 1" {
+	local pairs
+	pairs=$(printf '%s|log1' "$LOGFILE")
+	TLOG_MODE="garbage" run tlog_advance_cursors "$BASERUN" "$pairs"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "tlog_advance_cursors: no journalctl skips journal tags silently" {
+	run bash -c '
+		unset _TLOG_LIB_LOADED
+		export PATH="/nonexistent"
+		source "'"${PROJECT_ROOT}"'/files/tlog_lib.sh"
+		tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+		pairs=$(printf "/nonexistent/fake.log|sshd")
+		tlog_advance_cursors "'"$BASERUN"'" "$pairs"
+	'
+	[[ "$status" -eq 0 ]]
+	# No cursor created when journalctl unavailable
+	[[ ! -f "$BASERUN/sshd" ]]
+}
+
+@test "tlog_advance_cursors: empty tag skipped" {
+	local pairs
+	pairs=$(printf '/some/file|')
+	run tlog_advance_cursors "$BASERUN" "$pairs"
+	[[ "$status" -eq 0 ]]
+}

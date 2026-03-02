@@ -436,8 +436,18 @@ tlog_adjust_cursor() {
 # For journal-capable tags, captures journal cursor position.
 tlog_advance_cursors() {
 	local baserun="$1" log_pairs="$2"
-	local file tag newsize cursor_line
+	local file tag newsize cursor_line jfilter
 	local mode="${TLOG_MODE:-bytes}"
+
+	# Mode validation — reject invalid before any I/O
+	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
+		echo "tlog: tlog_advance_cursors: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
+		return 1
+	fi
+
+	# Check journalctl availability once, outside the loop
+	local have_journalctl=0
+	command -v journalctl >/dev/null 2>&1 && have_journalctl=1
 
 	while IFS='|' read -r file tag; do
 		[[ -z "$tag" ]] && continue
@@ -446,9 +456,11 @@ tlog_advance_cursors() {
 			# File cursor: record current size
 			newsize=$(_tlog_get_size "$file" "$mode")
 			_tlog_write_cursor "$tag" "$baserun" "$newsize" "$mode"
-		elif command -v journalctl >/dev/null 2>&1 && tlog_journal_filter "$tag" >/dev/null 2>&1; then
-			# Journal cursor: capture current position
-			cursor_line=$(journalctl -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+		elif [[ "$have_journalctl" -eq 1 ]]; then
+			jfilter=$(tlog_journal_filter "$tag") || continue
+			# Journal cursor: capture current per-service position
+			# shellcheck disable=SC2086
+			cursor_line=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
 			if [[ -n "$cursor_line" ]]; then
 				_tlog_write_cursor "$tag" "$baserun" "$cursor_line" "raw"
 				_tlog_write_cursor "${tag}.jts" "$baserun" "$(date +%s)" "raw"
