@@ -2,6 +2,20 @@ tlog_lib CHANGELOG
 ==================
 
 - 2.0.2 | Mar 02 2026:
+  [Fix] Baserun directory validated before journal dispatch in tlog_read() —
+      prevents journal attempt when baserun is missing (F-010)
+  [Fix] tlog_advance_cursors() now validates baserun directory before
+      processing; returns exit 1 on missing baserun (F-010)
+  [Fix] tlog_journal_read() now validates baserun directory independently —
+      defense in depth for direct callers (F-010)
+  [New] _tlog_check_baserun_perms() advisory helper: warns on stderr when
+      baserun directory is world-writable; non-fatal (always returns 0);
+      called from tlog_read(), tlog_journal_read(), tlog_advance_cursors()
+      (F-019)
+  [New] BATS tests: 7 new tests for baserun validation before journal dispatch,
+      missing baserun in tlog_advance_cursors, world-writable baserun warning
+      (library, journal, CLI), and non-world-writable false-positive (F-010,
+      F-019)
   [Change] CI test matrix now requires lint job to pass before running tests;
       prevents wasted CI minutes on syntactically invalid code (F-046)
   [Change] CLI --first-run flag validates value (must be 'skip' or 'full');

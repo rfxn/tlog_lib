@@ -340,6 +340,25 @@ teardown() {
 }
 
 # ===================================================================
+# Baserun Validation — Journal Functions (2 tests, F-010/F-019)
+# ===================================================================
+
+@test "tlog_journal_read: missing baserun returns exit 1 (F-010)" {
+	run tlog_journal_read "sshd" "$TEST_TMPDIR/no_such_dir"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"baserun directory not found"* ]]
+}
+
+@test "FP: tlog_journal_read: world-writable baserun warns but succeeds (F-019)" {
+	local ww_baserun="$TEST_TMPDIR/world_writable"
+	mkdir -p "$ww_baserun"
+	chmod 777 "$ww_baserun"
+	run tlog_journal_read "sshd" "$ww_baserun"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"world-writable"* ]]
+}
+
+# ===================================================================
 # Name Validation — Journal Functions (2 tests)
 # ===================================================================
 

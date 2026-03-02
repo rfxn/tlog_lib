@@ -497,6 +497,20 @@ teardown() {
 }
 
 # ===================================================================
+# Baserun Permissions Warning (1 test, F-019)
+# ===================================================================
+
+@test "tlog: world-writable BASERUN warns but succeeds (F-019)" {
+	local ww_baserun="$TEST_TMPDIR/world_writable"
+	mkdir -p "$ww_baserun"
+	chmod 777 "$ww_baserun"
+	run "$TLOG" -b "$ww_baserun" "$LOGFILE" "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"world-writable"* ]]
+	[[ -f "$ww_baserun/testlog" ]]
+}
+
+# ===================================================================
 # False-Positive Tests (2 tests)
 # ===================================================================
 

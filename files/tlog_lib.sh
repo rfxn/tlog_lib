@@ -47,6 +47,20 @@ _tlog_validate_name() {
 	return 0
 }
 
+# _tlog_check_baserun_perms(baserun)
+# Advisory warning if baserun directory is world-writable.
+# Always returns 0 — never fatal.
+_tlog_check_baserun_perms() {
+	local baserun="$1"
+	local perms world_bits
+	perms=$(stat -c '%a' "$baserun" 2>/dev/null) || return 0
+	world_bits="${perms: -1}"
+	if [[ $((world_bits & 2)) -ne 0 ]]; then
+		echo "tlog: warning: baserun directory '$baserun' is world-writable" >&2
+	fi
+	return 0
+}
+
 # _tlog_parse_cursor(tlog_name, baserun)
 # Read and validate cursor file. Sets _tlog_cursor_value and
 # _tlog_cursor_mode for the caller. Returns 0 on success/first-run,
@@ -279,6 +293,13 @@ tlog_read() {
 	# Name validation — reject path traversal before any file I/O
 	_tlog_validate_name "$tlog_name" || return 1
 
+	# Baserun validation — check BEFORE journal dispatch (F-010)
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
+
 	# Journal dispatch: file missing and journal not disabled
 	if [[ ! -f "$file" ]] && [[ "${LOG_SOURCE}" != "file" ]]; then
 		tlog_journal_read "$tlog_name" "$baserun"
@@ -288,11 +309,6 @@ tlog_read() {
 	# Validation
 	if [[ ! -f "$file" ]]; then
 		echo "tlog: file not found: $file" >&2
-		return 1
-	fi
-
-	if [[ ! -d "$baserun" ]]; then
-		echo "tlog: baserun directory not found: $baserun" >&2
 		return 1
 	fi
 
@@ -471,6 +487,13 @@ tlog_advance_cursors() {
 		return 1
 	fi
 
+	# Baserun validation (F-010)
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: tlog_advance_cursors: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
+
 	# Check journalctl availability once, outside the loop
 	local have_journalctl=0
 	command -v journalctl >/dev/null 2>&1 && have_journalctl=1
@@ -539,6 +562,13 @@ tlog_journal_read() {
 
 	# Name validation — reject path traversal
 	_tlog_validate_name "$tlog_name" || return 1
+
+	# Baserun validation (F-010) — defense in depth for direct callers
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
 
 	# Check journalctl available
 	if ! command -v journalctl >/dev/null 2>&1; then

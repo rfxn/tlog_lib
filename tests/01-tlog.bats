@@ -394,6 +394,38 @@ teardown() {
 	[[ "$status" -eq 1 ]]
 }
 
+@test "tlog_read: baserun validated before journal dispatch (F-010)" {
+	# File missing + journal not disabled + baserun missing → exit 1 (not journal attempt)
+	LOG_SOURCE=""
+	run tlog_read "$TEST_TMPDIR/nonexistent.log" "sshd" "$TEST_TMPDIR/no_such_dir" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"baserun directory not found"* ]]
+}
+
+@test "tlog_advance_cursors: missing baserun directory returns exit 1 (F-010)" {
+	local pairs
+	pairs=$(printf '%s|log1' "$LOGFILE")
+	run tlog_advance_cursors "$TEST_TMPDIR/no_such_dir" "$pairs"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"baserun directory not found"* ]]
+}
+
+@test "world-writable baserun warns but succeeds (F-019)" {
+	local ww_baserun="$TEST_TMPDIR/world_writable"
+	mkdir -p "$ww_baserun"
+	chmod 777 "$ww_baserun"
+	run tlog_read "$LOGFILE" "testlog" "$ww_baserun" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"world-writable"* ]]
+}
+
+@test "FP: non-world-writable baserun produces no warning (F-019)" {
+	# BASERUN from setup is 755 — no warning expected
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"world-writable"* ]]
+}
+
 @test "tlog_read: invalid mode returns exit 1" {
 	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "line"
 	[[ "$status" -eq 1 ]]
