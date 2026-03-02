@@ -497,6 +497,31 @@ teardown() {
 }
 
 # ===================================================================
+# BASERUN /tmp Warning (3 tests, F-033)
+# ===================================================================
+
+@test "tlog: BASERUN=/tmp warns when root (F-033)" {
+	run env BASERUN="/tmp" "$TLOG" "$LOGFILE" "testlog"
+	# Test containers run as root
+	[[ "$output" == *"BASERUN is /tmp"* ]]
+	[[ "$output" == *"set -b/--baserun"* ]]
+}
+
+@test "FP: tlog: --full does not warn about /tmp (F-033)" {
+	run env BASERUN="/tmp" "$TLOG" --full "$LOGFILE"
+	[[ "$status" -eq 0 ]]
+	# --full does not use cursors, no /tmp warning
+	[[ "$output" != *"BASERUN is /tmp"* ]]
+}
+
+@test "FP: tlog: custom -b path suppresses /tmp warning (F-033)" {
+	run "$TLOG" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 0 ]]
+	# Custom baserun is not /tmp, no warning
+	[[ "$output" != *"BASERUN is /tmp"* ]]
+}
+
+# ===================================================================
 # Baserun Permissions Warning (1 test, F-019)
 # ===================================================================
 

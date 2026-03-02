@@ -302,6 +302,12 @@ if [[ -n "$_OPT_FIRST_RUN" ]]; then
 	export TLOG_FIRST_RUN
 fi
 
+# Warn when running as root with BASERUN=/tmp (cursor-using commands only)
+if [[ "$_CMD" != "full" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$BASERUN" == "/tmp" ]]; then
+	echo "tlog: warning: BASERUN is /tmp; cursor files stored in world-writable directory" >&2
+	echo "tlog: warning: set -b/--baserun or BASERUN env to a secure path" >&2
+fi
+
 ###########################################################################
 # Validation helpers
 ###########################################################################

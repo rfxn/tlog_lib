@@ -26,6 +26,12 @@ tlog_lib CHANGELOG
   [New] BATS tests: 6 new tests for cursor write failure warnings (mktemp
       failure, tlog_read resilience), journal flock (lock creation, contention
       exit 4, disabled no-lock, cursor unchanged on lock failure) (F-007, F-008)
+  [New] CLI /tmp warning: when running as root with BASERUN=/tmp, emits
+      advisory warning directing user to set -b/--baserun or BASERUN env;
+      gated on cursor-using commands only (--full excluded); complements
+      library-level world-writable detection (F-033)
+  [New] BATS tests: 3 new tests for CLI /tmp warning (root warning, --full
+      excluded, custom -b suppression) (F-033)
   [Change] CI test matrix now requires lint job to pass before running tests;
       prevents wasted CI minutes on syntactically invalid code (F-046)
   [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
