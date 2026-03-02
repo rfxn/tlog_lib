@@ -34,6 +34,19 @@ _TLOG_JOURNAL_FILTERS=()
 # Internal helpers
 ###########################################################################
 
+# _tlog_validate_name(tlog_name)
+# Reject names that could escape baserun via path traversal.
+# Names must be plain identifiers — no slashes, no . or .. components.
+# Returns 1 on invalid (library context — never exit).
+_tlog_validate_name() {
+	local name="$1"
+	if [[ -z "$name" ]] || [[ "$name" == "." ]] || [[ "$name" == ".." ]] || [[ "$name" == *"/"* ]]; then
+		echo "tlog: invalid tlog_name: '$name'" >&2
+		return 1
+	fi
+	return 0
+}
+
 # _tlog_parse_cursor(tlog_name, baserun)
 # Read and validate cursor file. Sets _tlog_cursor_value and
 # _tlog_cursor_mode for the caller. Returns 0 on success/first-run,
@@ -263,6 +276,9 @@ tlog_read() {
 		return 1
 	fi
 
+	# Name validation — reject path traversal before any file I/O
+	_tlog_validate_name "$tlog_name" || return 1
+
 	# Journal dispatch: file missing and journal not disabled
 	if [[ ! -f "$file" ]] && [[ "${LOG_SOURCE}" != "file" ]]; then
 		tlog_journal_read "$tlog_name" "$baserun"
@@ -407,6 +423,9 @@ tlog_adjust_cursor() {
 	local numeric_pat='^[0-9]+$'
 	local new_value mode
 
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
 	# Validate delta is numeric
 	if [[ ! "$delta_removed" =~ $numeric_pat ]]; then
 		echo "tlog: invalid delta: $delta_removed" >&2
@@ -451,6 +470,7 @@ tlog_advance_cursors() {
 
 	while IFS='|' read -r file tag; do
 		[[ -z "$tag" ]] && continue
+		_tlog_validate_name "$tag" || continue
 
 		if [[ -f "$file" ]]; then
 			# File cursor: record current size
@@ -459,6 +479,7 @@ tlog_advance_cursors() {
 		elif [[ "$have_journalctl" -eq 1 ]]; then
 			jfilter=$(tlog_journal_filter "$tag") || continue
 			# Journal cursor: capture current per-service position
+			# $jfilter intentionally unquoted: multi-token filters require word-splitting
 			# shellcheck disable=SC2086
 			cursor_line=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
 			if [[ -n "$cursor_line" ]]; then
@@ -509,6 +530,9 @@ tlog_journal_read() {
 	local jfilter stored_cursor stored_jts new_cursor new_jts
 	local output_data
 
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
 	# Check journalctl available
 	if ! command -v journalctl >/dev/null 2>&1; then
 		return 3
@@ -523,14 +547,30 @@ tlog_journal_read() {
 		read -r stored_cursor < "$cursor_file" 2>/dev/null || true
 	fi
 
+	# Validate cursor format — allowlist covers real systemd cursor tokens
+	# (s=<hex>;i=<hex>;...) and rejects shell metacharacters
+	local _jcursor_pat='^[a-zA-Z0-9=;_:-]+$'
+	if [[ -n "$stored_cursor" ]] && [[ ! "$stored_cursor" =~ $_jcursor_pat ]]; then
+		echo "tlog: corrupt journal cursor for $tlog_name, resetting" >&2
+		stored_cursor=""
+	fi
+
 	# Read stored journal timestamp
 	stored_jts=""
 	if [[ -f "$jts_file" ]]; then
 		read -r stored_jts < "$jts_file" 2>/dev/null || true
 	fi
 
+	# Validate timestamp is numeric
+	local _jts_pat='^[0-9]+$'
+	if [[ -n "$stored_jts" ]] && [[ ! "$stored_jts" =~ $_jts_pat ]]; then
+		echo "tlog: corrupt journal timestamp for $tlog_name, resetting" >&2
+		stored_jts=""
+	fi
+
 	# First run: capture position, output nothing
 	if [[ -z "$stored_cursor" ]] && [[ -z "$stored_jts" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		new_cursor=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
 		new_jts=$(date +%s)
@@ -546,14 +586,17 @@ tlog_journal_read() {
 
 	# Subsequent run: try cursor first, fallback to timestamp
 	if [[ -n "$stored_cursor" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		if ! output_data=$(journalctl $jfilter --after-cursor="$stored_cursor" --no-pager 2>/dev/null); then
 			if [[ -n "$stored_jts" ]]; then
+				# $jfilter intentionally unquoted: multi-token filters require word-splitting
 				# shellcheck disable=SC2086
 				output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true
 			fi
 		fi
 	elif [[ -n "$stored_jts" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true
 	fi
@@ -564,6 +607,7 @@ tlog_journal_read() {
 	fi
 
 	# Capture new cursor + timestamp
+	# $jfilter intentionally unquoted: multi-token filters require word-splitting
 	# shellcheck disable=SC2086
 	new_cursor=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
 	new_jts=$(date +%s)
@@ -589,6 +633,9 @@ tlog_journal_read_full() {
 	local jfilter
 	local cmd_args=()
 
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
 	# Check journalctl available
 	if ! command -v journalctl >/dev/null 2>&1; then
 		return 3
@@ -603,9 +650,11 @@ tlog_journal_read_full() {
 	cmd_args+=(--no-pager)
 
 	if [[ "$scan_timeout" -gt 0 ]] && command -v timeout >/dev/null 2>&1; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		timeout "$scan_timeout" journalctl $jfilter "${cmd_args[@]}" 2>/dev/null
 	else
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		journalctl $jfilter "${cmd_args[@]}" 2>/dev/null
 	fi

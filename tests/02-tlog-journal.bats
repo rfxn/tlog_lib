@@ -310,3 +310,71 @@ teardown() {
 	run tlog_advance_cursors "$BASERUN" "$pairs"
 	[[ "$status" -eq 0 ]]
 }
+
+# ===================================================================
+# Name Validation — Journal Functions (2 tests)
+# ===================================================================
+
+@test "tlog_journal_read rejects ../escape name" {
+	run tlog_journal_read "../escape" "$BASERUN"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_journal_read_full rejects ../escape name" {
+	run tlog_journal_read_full "../escape" 0 10
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+# ===================================================================
+# Journal Content Validation (4 tests)
+# ===================================================================
+
+@test "corrupt journal cursor with shell metacharacters resets to timestamp fallback" {
+	# Write cursor with shell injection attempt
+	printf '$(whoami)\n' > "$BASERUN/sshd"
+	# Write valid timestamp
+	printf '%s\n' "$(date +%s)" > "$BASERUN/sshd.jts"
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 0 ]]
+	# Should warn about corrupt cursor
+	[[ "$output" == *"corrupt journal cursor"* ]]
+	# Mock returns "mock journal fallback line" for --since=@
+	[[ "$output" == *"mock journal fallback line"* ]]
+}
+
+@test "corrupt journal timestamp with non-numeric resets" {
+	# Write valid cursor
+	printf 's=test_cursor_abc123\n' > "$BASERUN/sshd"
+	# Write corrupt timestamp
+	printf 'not-a-number\n' > "$BASERUN/sshd.jts"
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 0 ]]
+	# Should warn about corrupt timestamp
+	[[ "$output" == *"corrupt journal timestamp"* ]]
+}
+
+@test "valid cursor format accepted without corrupt warning" {
+	# Write a valid systemd-style cursor
+	printf 's=abc123def;i=1;b=deadbeef;m=cafe;t=12345;x=99\n' > "$BASERUN/sshd"
+	printf '%s\n' "$(date +%s)" > "$BASERUN/sshd.jts"
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 0 ]]
+	# FP: no corrupt warning
+	[[ "$output" != *"corrupt journal cursor"* ]]
+}
+
+@test "both cursor and jts corrupt triggers first-run behavior" {
+	# Write corrupt cursor
+	printf '$(rm -rf /)\n' > "$BASERUN/sshd"
+	# Write corrupt timestamp
+	printf '$(date)\n' > "$BASERUN/sshd.jts"
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 0 ]]
+	# Both cleared → first-run path: no content output (only warnings + first-run capture)
+	# Filter out tlog: warning lines — remaining should be empty
+	local content_lines
+	content_lines=$(printf '%s\n' "$output" | grep -v '^tlog:' | grep -v '^$' || true)
+	[[ -z "$content_lines" ]]
+}

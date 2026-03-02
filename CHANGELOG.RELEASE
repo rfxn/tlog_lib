@@ -1,4 +1,19 @@
 - 2.0.1 | Mar 01 2026:
+  [Fix] Library-level tlog_name path traversal validation in tlog_read,
+      tlog_adjust_cursor, tlog_journal_read, tlog_journal_read_full, and
+      tlog_advance_cursors -- reject names containing '/' or equal to '.'/'..';
+      defense-in-depth alongside existing CLI validation (C-002)
+  [Fix] Journal cursor content validation: allowlist format check before
+      interpolation into --after-cursor argument; rejects shell metacharacters,
+      clears corrupt cursor to trigger timestamp fallback (C-003/F-014)
+  [Fix] Journal timestamp content validation: numeric-only check before
+      interpolation into --since=@ argument; clears corrupt value to trigger
+      first-run fallback (C-003/F-015)
+  [Change] Document intentional $jfilter unquoted expansion at all 8 SC2086
+      shellcheck directive sites with explanatory comments (F-016)
+  [New] BATS tests: 18 new tests for library-level name validation (positive,
+      false-positive, and security tests) and journal content validation
+      (cursor/timestamp format checks, corrupt data handling)
   [Fix] tlog_advance_cursors: pass per-service journal filter to journalctl
       --show-cursor instead of capturing global cursor position
   [Fix] tlog_advance_cursors: validate TLOG_MODE before processing (matches

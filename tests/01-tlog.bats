@@ -408,6 +408,95 @@ teardown() {
 }
 
 # ===================================================================
+# Name Validation — Library Level (12 tests)
+# ===================================================================
+
+@test "tlog_read rejects ../escape name" {
+	run tlog_read "$LOGFILE" "../escape" "$BASERUN" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_read rejects .. name" {
+	run tlog_read "$LOGFILE" ".." "$BASERUN" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_read rejects . name" {
+	run tlog_read "$LOGFILE" "." "$BASERUN" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_read rejects empty name" {
+	run tlog_read "$LOGFILE" "" "$BASERUN" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_read path traversal does not create file outside baserun" {
+	run tlog_read "$LOGFILE" "../../tmp/evil" "$BASERUN" "bytes"
+	[[ "$status" -eq 1 ]]
+	# FP: no file created outside baserun
+	[[ ! -f "$TEST_TMPDIR/evil" ]]
+	[[ ! -f "/tmp/evil" ]]
+}
+
+@test "tlog_adjust_cursor rejects ../escape name" {
+	_tlog_write_cursor "testlog" "$BASERUN" "1000" "bytes"
+	run tlog_adjust_cursor "../escape" "$BASERUN" "100"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_advance_cursors skips ../bad tag but processes valid tags" {
+	local log2="$TEST_TMPDIR/test2.log"
+	printf 'log2 content\n' > "$log2"
+	local pairs
+	pairs=$(printf '%s|../bad\n%s|goodtag' "$LOGFILE" "$log2")
+	run tlog_advance_cursors "$BASERUN" "$pairs"
+	[[ "$status" -eq 0 ]]
+	# Bad tag should not create a file
+	[[ ! -f "$BASERUN/../bad" ]]
+	# Good tag should have cursor
+	[[ -f "$BASERUN/goodtag" ]]
+}
+
+@test "mktemp template injection blocked for ../../tmp/evil" {
+	run tlog_read "$LOGFILE" "../../tmp/evil" "$BASERUN" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+@test "tlog_read accepts pure-ftpd (hyphen in name)" {
+	run tlog_read "$LOGFILE" "pure-ftpd" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ -f "$BASERUN/pure-ftpd" ]]
+}
+
+@test "tlog_read accepts digest.alert (dot in name)" {
+	run tlog_read "$LOGFILE" "digest.alert" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ -f "$BASERUN/digest.alert" ]]
+}
+
+@test "tlog_read accepts exim_authfail (underscore in name)" {
+	run tlog_read "$LOGFILE" "exim_authfail" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ -f "$BASERUN/exim_authfail" ]]
+}
+
+@test "tlog_adjust_cursor accepts my-log name" {
+	_tlog_write_cursor "my-log" "$BASERUN" "500" "bytes"
+	run tlog_adjust_cursor "my-log" "$BASERUN" "100"
+	[[ "$status" -eq 0 ]]
+	local cursor
+	read -r cursor < "$BASERUN/my-log"
+	[[ "$cursor" == "400" ]]
+}
+
+# ===================================================================
 # tlog_read_full (2 tests)
 # ===================================================================
 
