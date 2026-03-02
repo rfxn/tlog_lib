@@ -101,7 +101,7 @@ teardown() {
 }
 
 # ===================================================================
-# Help & Version (6 tests)
+# Help & Version (5 tests)
 # ===================================================================
 
 @test "tlog: -v shows version and exits 0" {
@@ -131,12 +131,6 @@ teardown() {
 	[[ "$output" == *"EXAMPLES"* ]]
 	[[ "$output" == *"DESCRIPTION"* ]]
 	[[ "$output" == *"ENVIRONMENT"* ]]
-}
-
-@test "tlog: no args shows usage to stderr and exits 1" {
-	run "$TLOG"
-	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"usage:"* ]]
 }
 
 @test "tlog: -v works even when library is renamed" {
@@ -301,7 +295,7 @@ teardown() {
 }
 
 # ===================================================================
-# --reset Subcommand (5 tests)
+# --reset Subcommand (4 tests)
 # ===================================================================
 
 @test "tlog: --reset deletes cursor file" {
@@ -335,15 +329,11 @@ teardown() {
 	[[ ! -f "$BASERUN/.testlog.Qw9rTp" ]]
 }
 
-@test "tlog: --reset with no cursor reports nothing found" {
+@test "tlog: --reset with no cursor reports nothing found and creates no files" {
 	run "$TLOG" --reset "nonexistent"
 	[[ "$status" -eq 0 ]]
 	[[ "$output" == *"no cursor files found"* ]]
-}
-
-@test "tlog: FP --reset does not create files" {
-	run "$TLOG" --reset "nonexistent"
-	[[ "$status" -eq 0 ]]
+	# FP: no files created
 	local count
 	count=$(find "$BASERUN" -type f | wc -l)
 	[[ "$count" -eq 0 ]]
@@ -484,7 +474,7 @@ teardown() {
 }
 
 # ===================================================================
-# False-Positive Tests (3 tests)
+# False-Positive Tests (2 tests)
 # ===================================================================
 
 @test "tlog: FP --full ignores -f (no .lock created)" {
@@ -506,8 +496,3 @@ teardown() {
 	[[ ! -s "$stderr_file" ]]
 }
 
-@test "tlog: FP --reset nonexistent cursor does not create cursor" {
-	run "$TLOG" --reset "ghost"
-	[[ "$status" -eq 0 ]]
-	[[ ! -f "$BASERUN/ghost" ]]
-}

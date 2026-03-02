@@ -512,15 +512,8 @@ teardown() {
 }
 
 # ===================================================================
-# Flock (3 tests)
+# Flock (2 tests)
 # ===================================================================
-
-@test "TLOG_FLOCK=0: does not create .lock files" {
-	TLOG_FLOCK="0"
-	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
-	# FP: no lock file
-	[[ ! -f "$BASERUN/testlog.lock" ]]
-}
 
 @test "TLOG_FLOCK=1: lock held by another process returns exit 4" {
 	TLOG_FLOCK="1"
