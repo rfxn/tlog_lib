@@ -470,6 +470,15 @@ _tlog_cmd_reset() {
 		fi
 	done
 
+	# Orphaned JTS temp files (mktemp pattern: .NAME.jts.XXXXXX)
+	for tmpfile in "$BASERUN"/."${name}".jts.??????; do
+		if [[ -f "$tmpfile" ]]; then
+			rm -f "$tmpfile"
+			printf 'removed: %s\n' "$tmpfile"
+			found=1
+		fi
+	done
+
 	if [[ $found -eq 0 ]]; then
 		printf 'no cursor files found for: %s\n' "$name"
 	fi

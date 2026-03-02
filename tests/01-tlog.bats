@@ -885,3 +885,22 @@ teardown() {
 	[[ "$output" != *"BZ2 ROTATED SHOULD NOT APPEAR"* ]]
 	[[ "$output" == *"appended content"* ]]
 }
+
+# ===================================================================
+# Rotation Temp File Cleanup (1 test, F-021)
+# ===================================================================
+
+@test "FP: compressed rotation leaves no orphaned temp files in BASERUN (F-021)" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Simulate rotation with .1.gz
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new file line one\n' > "$LOGFILE"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# FP: no orphaned temp files from rotation decompression
+	local orphans
+	orphans=$(find "$BASERUN" -name ".testlog.*" -type f | wc -l)
+	[[ "$orphans" -eq 0 ]]
+}

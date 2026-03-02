@@ -22,6 +22,15 @@ tlog_lib CHANGELOG
       in helper (F-024)
   [New] BATS tests: 2 new tests for _tlog_journal_get_cursor helper — cursor
       string return and empty-when-no-cursor-line (F-024)
+  [Change] Extract _tlog_handle_rotation() helper: compressed files decompressed
+      once to temp file (was twice — once for size, once for content); reuses
+      _tlog_get_size/_tlog_output_content helpers; reduces tlog_read() rotation
+      block from 38 lines to 10 (F-021, F-022, F-026)
+  [Fix] --reset subcommand: add JTS orphan temp file cleanup glob
+      (.NAME.jts.XXXXXX) alongside existing cursor temp file glob; prevents
+      orphaned journal timestamp temp files from accumulating (F-051)
+  [New] BATS tests: 2 new tests — compressed rotation temp file cleanup
+      false-positive, --reset JTS orphan cleanup (F-021, F-051)
   [Fix] Baserun directory validated before journal dispatch in tlog_read() —
       prevents journal attempt when baserun is missing (F-010)
   [Fix] tlog_advance_cursors() now validates baserun directory before

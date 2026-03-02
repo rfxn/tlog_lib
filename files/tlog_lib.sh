@@ -248,6 +248,44 @@ _tlog_find_rotated() {
 	return 1
 }
 
+# _tlog_handle_rotation(rtfile, cursor_size, mode, tlog_name, baserun)
+# Output tail content from a rotated log file newer than cursor_size.
+# Compressed files are decompressed once to a temp file, then measured
+# and read from the temp file — avoids double decompression (F-021)
+# and reuses _tlog_get_size/_tlog_output_content helpers (F-022).
+# Temp file uses same mktemp pattern as cursor writes for --reset
+# orphan cleanup consistency.
+_tlog_handle_rotation() {
+	local rtfile="$1" cursor_size="$2" mode="$3"
+	local tlog_name="$4" baserun="$5"
+	local rtsize rt_delta tmp_decomp=""
+
+	if _tlog_is_compressed "$rtfile"; then
+		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || {
+			echo "tlog: warning: rotation temp file failed for $tlog_name" >&2
+			return 0
+		}
+		_tlog_cat_file "$rtfile" > "$tmp_decomp"
+		rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
+	else
+		rtsize=$(_tlog_get_size "$rtfile" "$mode")
+	fi
+
+	if [[ "$rtsize" -ge "$cursor_size" ]]; then
+		rt_delta=$((rtsize - cursor_size))
+		if [[ "$rt_delta" -gt 0 ]]; then
+			if [[ -n "$tmp_decomp" ]]; then
+				_tlog_output_content "$tmp_decomp" "$rt_delta" "$mode"
+			else
+				_tlog_output_content "$rtfile" "$rt_delta" "$mode"
+			fi
+		fi
+	fi
+
+	[[ -n "$tmp_decomp" ]] && rm -f "$tmp_decomp"
+	return 0
+}
+
 ###########################################################################
 # Public utility functions
 ###########################################################################
@@ -292,9 +330,9 @@ tlog_get_line_count() {
 tlog_read() {
 	local file="$1" tlog_name="$2" baserun="$3"
 	local mode="${4:-${TLOG_MODE:-bytes}}"
-	local newsize delta size rtfile rtsize _tlog_fd
+	local newsize delta size rtfile _tlog_fd
 	local cursor_corrupt=0 rc=0
-	local stored_mode parse_rc rt_delta
+	local stored_mode parse_rc
 
 	# Mode validation — reject typos before any I/O
 	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
@@ -375,33 +413,7 @@ tlog_read() {
 	elif [[ "$newsize" -lt "$size" ]]; then
 		rtfile=$(_tlog_find_rotated "$file") || true
 		if [[ -n "$rtfile" ]]; then
-			# Get rotated file size in correct mode
-			if _tlog_is_compressed "$rtfile"; then
-				if [[ "$mode" == "lines" ]]; then
-					rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
-				else
-					rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
-				fi
-				rtsize="${rtsize## }"
-			else
-				rtsize=$(_tlog_get_size "$rtfile" "$mode")
-			fi
-
-			# Bounds check: only output if rotated file covers our cursor
-			if [[ "$rtsize" -ge "$size" ]]; then
-				rt_delta=$((rtsize - size))
-				if [[ "$rt_delta" -gt 0 ]]; then
-					if _tlog_is_compressed "$rtfile"; then
-						if [[ "$mode" == "lines" ]]; then
-							_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
-						else
-							_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
-						fi
-					else
-						_tlog_output_content "$rtfile" "$rt_delta" "$mode"
-					fi
-				fi
-			fi
+			_tlog_handle_rotation "$rtfile" "$size" "$mode" "$tlog_name" "$baserun"
 		fi
 
 		# Output current file content if any

@@ -346,6 +346,18 @@ teardown() {
 	[[ ! -f "$BASERUN/.testlog.Qw9rTp" ]]
 }
 
+@test "tlog: --reset cleans orphaned JTS temp files (F-051)" {
+	"$TLOG" "$LOGFILE" "testlog" >/dev/null 2>&1
+	# Simulate orphaned JTS mktemp files
+	touch "$BASERUN/.testlog.jts.aB3xYz"
+	touch "$BASERUN/.testlog.jts.Qw9rTp"
+	run "$TLOG" --reset "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ ! -f "$BASERUN/.testlog.jts.aB3xYz" ]]
+	[[ ! -f "$BASERUN/.testlog.jts.Qw9rTp" ]]
+	[[ "$output" == *"removed:"* ]]
+}
+
 @test "tlog: --reset with no cursor reports nothing found and creates no files" {
 	run "$TLOG" --reset "nonexistent"
 	[[ "$status" -eq 0 ]]
