@@ -12,3 +12,5 @@
       corrupt cursor display and false-positive (2 tests) (F-037, F-038)
   [Change] Mock journalctl enhanced with -n flag detection for max_lines
       limit testing
+  [Fix] CI lint step: add bash -n syntax checking and include
+      tests/run-tests.sh in shellcheck scope (F-044, F-045)
