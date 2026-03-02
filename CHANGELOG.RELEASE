@@ -1,4 +1,12 @@
 - 2.0.2 | Mar 02 2026:
+  [Change] Hoist numeric validation regex to library-scope _TLOG_NUMERIC_PAT;
+      eliminates 5 identical local declarations across _tlog_parse_cursor,
+      tlog_read_full, tlog_adjust_cursor, tlog_journal_read,
+      tlog_journal_read_full (F-025)
+  [Change] _tlog_get_size() bytes branch delegates to tlog_get_file_size();
+      removes duplicated stat/wc -c logic (F-027)
+  [Change] _tlog_parse_cursor() header comment documents out-parameters
+      (_tlog_cursor_value, _tlog_cursor_mode) and return codes (F-023)
   [Fix] Baserun directory validated before journal dispatch in tlog_read() —
       prevents journal attempt when baserun is missing (F-010)
   [Fix] tlog_advance_cursors() now validates baserun directory before

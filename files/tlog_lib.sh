@@ -30,6 +30,9 @@ TLOG_LIB_VERSION="2.0.2"
 _TLOG_JOURNAL_NAMES=()
 _TLOG_JOURNAL_FILTERS=()
 
+# Numeric validation pattern — shared across cursor, size, and timestamp checks
+_TLOG_NUMERIC_PAT='^[0-9]+$'
+
 ###########################################################################
 # Internal helpers
 ###########################################################################
@@ -62,14 +65,15 @@ _tlog_check_baserun_perms() {
 }
 
 # _tlog_parse_cursor(tlog_name, baserun)
-# Read and validate cursor file. Sets _tlog_cursor_value and
-# _tlog_cursor_mode for the caller. Returns 0 on success/first-run,
-# 2 on corrupt cursor (auto-reset).
+# Read and validate cursor file.
+# Out-parameters (set in caller scope before return):
+#   _tlog_cursor_value  Numeric cursor position, or "" on first-run/corrupt.
+#   _tlog_cursor_mode   "bytes" or "lines", or "" on first-run/corrupt.
+# Returns 0 on success/first-run, 2 on corrupt cursor (auto-reset).
 _tlog_parse_cursor() {
 	local tlog_name="$1" baserun="$2"
 	local cursor_file="$baserun/$tlog_name"
 	local raw_value=""
-	local numeric_pat='^[0-9]+$'
 
 	# shellcheck disable=SC2034
 	_tlog_cursor_value=""
@@ -102,7 +106,7 @@ _tlog_parse_cursor() {
 	fi
 
 	# Validate numeric
-	if [[ ! "$_tlog_cursor_value" =~ $numeric_pat ]]; then
+	if [[ ! "$_tlog_cursor_value" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: corrupt cursor $cursor_file: '$raw_value'" >&2
 		# shellcheck disable=SC2034
 		_tlog_cursor_value=""
@@ -156,8 +160,8 @@ _tlog_get_size() {
 			size="${size## }"
 			;;
 		*)
-			size=$(stat -c %s "$file" 2>/dev/null) || size=$(wc -c < "$file")
-			size="${size## }"
+			tlog_get_file_size "$file"
+			return $?
 			;;
 	esac
 
@@ -421,14 +425,13 @@ tlog_read() {
 # max_lines > 0 → tail -n, else cat.
 tlog_read_full() {
 	local file="$1" max_lines="${2:-0}"
-	local numeric_pat='^[0-9]+$'
 
 	if [[ ! -f "$file" ]]; then
 		return 1
 	fi
 
 	# Validate max_lines is numeric — non-numeric defaults to 0 (full output)
-	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $numeric_pat ]]; then
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: tlog_read_full: invalid max_lines: '$max_lines'" >&2
 		max_lines="0"
 	fi
@@ -447,14 +450,13 @@ tlog_read_full() {
 # Detects mode from stored cursor. Clamps to 0.
 tlog_adjust_cursor() {
 	local tlog_name="$1" baserun="$2" delta_removed="$3"
-	local numeric_pat='^[0-9]+$'
 	local new_value mode
 
 	# Name validation — reject path traversal
 	_tlog_validate_name "$tlog_name" || return 1
 
 	# Validate delta is numeric
-	if [[ ! "$delta_removed" =~ $numeric_pat ]]; then
+	if [[ ! "$delta_removed" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: invalid delta: $delta_removed" >&2
 		return 1
 	fi
@@ -613,8 +615,7 @@ tlog_journal_read() {
 	fi
 
 	# Validate timestamp is numeric
-	local _jts_pat='^[0-9]+$'
-	if [[ -n "$stored_jts" ]] && [[ ! "$stored_jts" =~ $_jts_pat ]]; then
+	if [[ -n "$stored_jts" ]] && [[ ! "$stored_jts" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: corrupt journal timestamp for $tlog_name, resetting" >&2
 		stored_jts=""
 	fi
@@ -697,14 +698,13 @@ tlog_journal_read_full() {
 	_tlog_validate_name "$tlog_name" || return 1
 
 	# Validate scan_timeout is numeric — non-numeric defaults to 0 (no timeout)
-	local numeric_pat='^[0-9]+$'
-	if [[ -n "$scan_timeout" ]] && [[ ! "$scan_timeout" =~ $numeric_pat ]]; then
+	if [[ -n "$scan_timeout" ]] && [[ ! "$scan_timeout" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: tlog_journal_read_full: invalid scan_timeout: '$scan_timeout'" >&2
 		scan_timeout="0"
 	fi
 
 	# Validate max_lines is numeric — non-numeric defaults to 0 (no limit)
-	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $numeric_pat ]]; then
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: tlog_journal_read_full: invalid max_lines: '$max_lines'" >&2
 		max_lines="0"
 	fi
