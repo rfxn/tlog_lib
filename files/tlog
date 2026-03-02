@@ -103,7 +103,7 @@ _tlog_usage_long() {
 	  --status <name> [file]
 	      Display cursor state: path, mode, value, and age. If file is given,
 	      also shows current file size and pending delta. Read-only — does not
-	      modify any files.
+	      modify any files. Exits 0 even for corrupt or uninitialized cursors.
 
 	  --reset <name>
 	      Delete cursor, .jts (journal timestamp), .lock, and any orphaned

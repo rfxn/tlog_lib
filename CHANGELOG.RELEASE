@@ -49,3 +49,5 @@
       limit testing
   [Fix] CI lint step: add bash -n syntax checking and include
       tests/run-tests.sh in shellcheck scope (F-044, F-045)
+  [Change] Remove 4 duplicate BATS tests from suite (133 to 129 before
+      2.0.2 additions) (F-032)

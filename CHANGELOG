@@ -52,6 +52,8 @@ tlog_lib CHANGELOG
       limit testing
   [Fix] CI lint step: add bash -n syntax checking and include
       tests/run-tests.sh in shellcheck scope (F-044, F-045)
+  [Change] Remove 4 duplicate BATS tests from suite (133 to 129 before
+      2.0.2 additions) (F-032)
 
 - 2.0.1 | Mar 01 2026:
   [Fix] Library-level tlog_name path traversal validation in tlog_read,

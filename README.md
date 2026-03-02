@@ -345,10 +345,14 @@ Returns 1 for unregistered names.
 **`tlog_journal_read(tlog_name, baserun)`** — cursor-based journal reader.
 First run captures the cursor position and outputs nothing. Subsequent runs
 output new entries since the stored cursor, with timestamp fallback.
+Returns 0 on success, 1 for unregistered service or invalid arguments,
+3 if `journalctl` is not available, 4 if lock acquisition fails
+(`TLOG_FLOCK=1` only).
 
 **`tlog_journal_read_full(tlog_name, scan_timeout, max_lines)`** — full
 journal read without cursor tracking. Supports timeout (via `timeout` command)
-and line limits.
+and line limits. Returns 0 on success, 1 for unregistered service, 3 if
+`journalctl` is not available.
 
 ## Environment Variables
 
@@ -530,10 +534,10 @@ make -C tests test-rocky9    # Rocky 9
 make -C tests test-all       # Full 9-OS matrix
 ```
 
-Tests run inside Docker containers via BATS. 133 tests cover both tracking
+Tests run inside Docker containers via BATS. 180 tests cover both tracking
 modes, rotation (including copytruncate and multi-format compression),
 cursor validation and corruption, flock locking, atomic writes, journal
-functions, and the standalone CLI wrapper (58 tests covering option
+functions, and the standalone CLI wrapper (62 tests covering option
 parsing, subcommands, help/version, false-positive verification, path
 traversal rejection, and mode validation).
 
