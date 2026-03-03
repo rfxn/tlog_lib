@@ -285,7 +285,29 @@ _tlog_handle_rotation() {
 			fi
 			return 0
 		}
-		_tlog_cat_file "$rtfile" > "$tmp_decomp"
+		if ! _tlog_cat_file "$rtfile" > "$tmp_decomp"; then
+			echo "tlog: warning: rotation decompress failed for $tlog_name, using pipe fallback" >&2
+			rm -f "$tmp_decomp"
+			tmp_decomp=""
+			# Pipe fallback on write failure (same as mktemp failure path)
+			if [[ "$mode" == "lines" ]]; then
+				rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
+			else
+				rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
+			fi
+			rtsize="${rtsize## }"
+			if [[ "$rtsize" -ge "$cursor_size" ]]; then
+				rt_delta=$((rtsize - cursor_size))
+				if [[ "$rt_delta" -gt 0 ]]; then
+					if [[ "$mode" == "lines" ]]; then
+						_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
+					else
+						_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
+					fi
+				fi
+			fi
+			return 0
+		fi
 		rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
 	else
 		rtsize=$(_tlog_get_size "$rtfile" "$mode")
