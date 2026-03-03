@@ -19,6 +19,12 @@ tlog_lib CHANGELOG
   [Change] Extract _tlog_handle_rotation() helper: compressed files
       decompressed once to temp file (was twice); reuses existing helpers;
       consolidates rotation block in tlog_read() (F-021, F-022, F-026)
+  [Fix] _tlog_handle_rotation() pipe fallback: when mktemp fails (low disk),
+      fall back to pipe-based decompression instead of silently dropping
+      rotated content; preserves data under degraded conditions
+  [Change] Remove CLI _tlog_validate_name() override: CLI now delegates to
+      the library function (return 1) with || exit 1 at call sites; eliminates
+      function collision where the CLI redefined a library internal
   [Change] Extract _tlog_journal_get_cursor() helper: centralizes journal
       cursor capture pipeline used at 3 call sites (F-024)
   [Change] Hoist numeric validation regex to library-scope _TLOG_NUMERIC_PAT;

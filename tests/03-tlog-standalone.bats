@@ -458,7 +458,7 @@ teardown() {
 @test "tlog: read rejects name with slash" {
 	run "$TLOG" "$LOGFILE" "../escape"
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: --reset rejects name with path traversal" {
@@ -467,7 +467,7 @@ teardown() {
 	touch "$target"
 	run "$TLOG" --reset "../victim"
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 	# File outside BASERUN must still exist
 	[[ -f "$target" ]]
 }
@@ -475,19 +475,19 @@ teardown() {
 @test "tlog: --status rejects name '..' " {
 	run "$TLOG" --status ".."
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: --adjust rejects name with embedded slash" {
 	run "$TLOG" --adjust "sub/dir" 10
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: rejects name '.'" {
 	run "$TLOG" "$LOGFILE" "."
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: -m with invalid mode exits 1" {

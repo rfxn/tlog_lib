@@ -255,14 +255,34 @@ _tlog_find_rotated() {
 # and reuses _tlog_get_size/_tlog_output_content helpers (F-022).
 # Temp file uses same mktemp pattern as cursor writes for --reset
 # orphan cleanup consistency.
+# On mktemp failure, falls back to pipe-based decompression to avoid
+# silently dropping rotated content under low-disk conditions.
 _tlog_handle_rotation() {
 	local rtfile="$1" cursor_size="$2" mode="$3"
 	local tlog_name="$4" baserun="$5"
 	local rtsize rt_delta tmp_decomp=""
 
 	if _tlog_is_compressed "$rtfile"; then
-		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || {
-			echo "tlog: warning: rotation temp file failed for $tlog_name" >&2
+		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || {
+			echo "tlog: warning: rotation temp file failed for $tlog_name, using pipe fallback" >&2
+			tmp_decomp=""
+			# Pipe fallback: decompress twice (size + content) without temp file
+			if [[ "$mode" == "lines" ]]; then
+				rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
+			else
+				rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
+			fi
+			rtsize="${rtsize## }"
+			if [[ "$rtsize" -ge "$cursor_size" ]]; then
+				rt_delta=$((rtsize - cursor_size))
+				if [[ "$rt_delta" -gt 0 ]]; then
+					if [[ "$mode" == "lines" ]]; then
+						_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
+					else
+						_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
+					fi
+				fi
+			fi
 			return 0
 		}
 		_tlog_cat_file "$rtfile" > "$tmp_decomp"
