@@ -248,67 +248,56 @@ _tlog_find_rotated() {
 	return 1
 }
 
+# _tlog_rotation_via_pipe(rtfile, cursor_size, mode)
+# Pipe-based fallback for compressed rotation: decompress twice (size + content)
+# without requiring disk space. Used when temp-file approach fails (low disk,
+# quota, permissions, corrupt archive).
+_tlog_rotation_via_pipe() {
+	local rtfile="$1" cursor_size="$2" mode="$3"
+	local rtsize rt_delta
+
+	if [[ "$mode" == "lines" ]]; then
+		rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
+	else
+		rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
+	fi
+	rtsize="${rtsize## }"
+
+	if [[ "$rtsize" -ge "$cursor_size" ]]; then
+		rt_delta=$((rtsize - cursor_size))
+		if [[ "$rt_delta" -gt 0 ]]; then
+			if [[ "$mode" == "lines" ]]; then
+				_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
+			else
+				_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
+			fi
+		fi
+	fi
+}
+
 # _tlog_handle_rotation(rtfile, cursor_size, mode, tlog_name, baserun)
 # Output tail content from a rotated log file newer than cursor_size.
-# Compressed files are decompressed once to a temp file, then measured
-# and read from the temp file — avoids double decompression (F-021)
-# and reuses _tlog_get_size/_tlog_output_content helpers (F-022).
-# Temp file uses same mktemp pattern as cursor writes for --reset
-# orphan cleanup consistency.
-# On mktemp failure, falls back to pipe-based decompression to avoid
-# silently dropping rotated content under low-disk conditions.
+# Compressed files: try temp-file approach (single decompress, faster);
+# on any failure (mktemp, write, corrupt), fall back to pipe-based
+# decompression via _tlog_rotation_via_pipe() to preserve data.
+# Uncompressed files: read directly via _tlog_output_content().
 _tlog_handle_rotation() {
 	local rtfile="$1" cursor_size="$2" mode="$3"
 	local tlog_name="$4" baserun="$5"
 	local rtsize rt_delta tmp_decomp=""
 
 	if _tlog_is_compressed "$rtfile"; then
-		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || {
+		# Try temp-file path: mktemp + decompress + read from temp
+		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || tmp_decomp=""
+		if [[ -n "$tmp_decomp" ]] && _tlog_cat_file "$rtfile" > "$tmp_decomp"; then
+			rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
+		else
+			# Temp approach failed — clean up and fall back to pipe
+			[[ -n "$tmp_decomp" ]] && rm -f "$tmp_decomp"
 			echo "tlog: warning: rotation temp file failed for $tlog_name, using pipe fallback" >&2
-			tmp_decomp=""
-			# Pipe fallback: decompress twice (size + content) without temp file
-			if [[ "$mode" == "lines" ]]; then
-				rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
-			else
-				rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
-			fi
-			rtsize="${rtsize## }"
-			if [[ "$rtsize" -ge "$cursor_size" ]]; then
-				rt_delta=$((rtsize - cursor_size))
-				if [[ "$rt_delta" -gt 0 ]]; then
-					if [[ "$mode" == "lines" ]]; then
-						_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
-					else
-						_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
-					fi
-				fi
-			fi
-			return 0
-		}
-		if ! _tlog_cat_file "$rtfile" > "$tmp_decomp"; then
-			echo "tlog: warning: rotation decompress failed for $tlog_name, using pipe fallback" >&2
-			rm -f "$tmp_decomp"
-			tmp_decomp=""
-			# Pipe fallback on write failure (same as mktemp failure path)
-			if [[ "$mode" == "lines" ]]; then
-				rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
-			else
-				rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
-			fi
-			rtsize="${rtsize## }"
-			if [[ "$rtsize" -ge "$cursor_size" ]]; then
-				rt_delta=$((rtsize - cursor_size))
-				if [[ "$rt_delta" -gt 0 ]]; then
-					if [[ "$mode" == "lines" ]]; then
-						_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
-					else
-						_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
-					fi
-				fi
-			fi
+			_tlog_rotation_via_pipe "$rtfile" "$cursor_size" "$mode"
 			return 0
 		fi
-		rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
 	else
 		rtsize=$(_tlog_get_size "$rtfile" "$mode")
 	fi
