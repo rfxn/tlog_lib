@@ -20,14 +20,21 @@ teardown() {
 # Version & Source Guard (2 tests)
 # ===================================================================
 
-@test "TLOG_LIB_VERSION is set and matches 2.0.1" {
-	[[ "$TLOG_LIB_VERSION" == "2.0.1" ]]
+@test "TLOG_LIB_VERSION is set and follows semver format" {
+	[[ -n "$TLOG_LIB_VERSION" ]]
+	local semver_pat='^[0-9]+\.[0-9]+\.[0-9]+$'
+	[[ "$TLOG_LIB_VERSION" =~ $semver_pat ]]
 }
 
 @test "source guard prevents double-sourcing side effects" {
-	# Sourcing again should be harmless (source guard returns 0)
+	# Register a mapping before re-sourcing — proves registry survives
+	tlog_journal_register "guard_test" "SYSLOG_IDENTIFIER=guard"
+	# Source again — guard should prevent re-execution (which would reset arrays)
 	source "${PROJECT_ROOT}/files/tlog_lib.sh"
-	[[ "$TLOG_LIB_VERSION" == "2.0.1" ]]
+	# Registry must still contain the mapping (not reset by re-sourcing)
+	local filter
+	filter=$(tlog_journal_filter "guard_test")
+	[[ "$filter" == "SYSLOG_IDENTIFIER=guard" ]]
 }
 
 # ===================================================================
@@ -315,6 +322,25 @@ teardown() {
 	[[ "$output" == *"new line one"* ]]
 }
 
+@test "tlog_read lines: rotation with .1.gz outputs via decompression (F-041)" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines" >/dev/null 2>&1
+	# Append lines and create compressed rotated file
+	printf 'line four\nline five\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new line one\nnew line two\n' > "$LOGFILE"
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines"
+	[[ "$status" -eq 0 ]]
+	# Output should contain remainder from rotated file + new file
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"line five"* ]]
+	[[ "$output" == *"new line one"* ]]
+	[[ "$output" == *"new line two"* ]]
+	# FP: compressed file must still exist on disk (no gunzip -d)
+	[[ -f "${LOGFILE}.1.gz" ]]
+}
+
 @test "tlog_read bytes: growth does not read from rotated files" {
 	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
 	# Growth path: append to current file
@@ -392,6 +418,38 @@ teardown() {
 @test "tlog_read: missing baserun directory returns exit 1" {
 	run tlog_read "$LOGFILE" "testlog" "$TEST_TMPDIR/nonexistent_dir" "bytes"
 	[[ "$status" -eq 1 ]]
+}
+
+@test "tlog_read: baserun validated before journal dispatch (F-010)" {
+	# File missing + journal not disabled + baserun missing → exit 1 (not journal attempt)
+	LOG_SOURCE=""
+	run tlog_read "$TEST_TMPDIR/nonexistent.log" "sshd" "$TEST_TMPDIR/no_such_dir" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"baserun directory not found"* ]]
+}
+
+@test "tlog_advance_cursors: missing baserun directory returns exit 1 (F-010)" {
+	local pairs
+	pairs=$(printf '%s|log1' "$LOGFILE")
+	run tlog_advance_cursors "$TEST_TMPDIR/no_such_dir" "$pairs"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"baserun directory not found"* ]]
+}
+
+@test "world-writable baserun warns but succeeds (F-019)" {
+	local ww_baserun="$TEST_TMPDIR/world_writable"
+	mkdir -p "$ww_baserun"
+	chmod 777 "$ww_baserun"
+	run tlog_read "$LOGFILE" "testlog" "$ww_baserun" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"world-writable"* ]]
+}
+
+@test "FP: non-world-writable baserun produces no warning (F-019)" {
+	# BASERUN from setup is 755 — no warning expected
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"world-writable"* ]]
 }
 
 @test "tlog_read: invalid mode returns exit 1" {
@@ -514,6 +572,24 @@ teardown() {
 	[[ "$output" == "$expected" ]]
 }
 
+@test "tlog_read_full: non-numeric max_lines defaults to full output" {
+	run tlog_read_full "$LOGFILE" "garbage"
+	[[ "$status" -eq 0 ]]
+	# Warning on stderr captured by run
+	[[ "$output" == *"invalid max_lines"* ]]
+	# Full file content output (fallback to cat)
+	[[ "$output" == *"line one"* ]]
+	[[ "$output" == *"line two"* ]]
+	[[ "$output" == *"line three"* ]]
+}
+
+@test "FP: tlog_read_full: non-numeric max_lines does not cause arithmetic errors" {
+	run tlog_read_full "$LOGFILE" "not-a-number"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"syntax error"* ]]
+	[[ "$output" != *"integer expression expected"* ]]
+}
+
 # ===================================================================
 # tlog_adjust_cursor (4 tests)
 # ===================================================================
@@ -548,6 +624,25 @@ teardown() {
 	[[ ! -f "$BASERUN/testlog" ]]
 }
 
+@test "tlog_adjust_cursor: non-numeric delta returns exit 1 (F-040)" {
+	_tlog_write_cursor "testlog" "$BASERUN" "1000" "bytes"
+	run tlog_adjust_cursor "testlog" "$BASERUN" "not-a-number"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid delta"* ]]
+	# Cursor must be unchanged
+	local cursor
+	read -r cursor < "$BASERUN/testlog"
+	[[ "$cursor" == "1000" ]]
+}
+
+@test "FP: tlog_adjust_cursor: non-numeric delta does not cause arithmetic error (F-040)" {
+	_tlog_write_cursor "testlog" "$BASERUN" "500" "bytes"
+	run tlog_adjust_cursor "testlog" "$BASERUN" "abc"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" != *"syntax error"* ]]
+	[[ "$output" != *"integer expression expected"* ]]
+}
+
 # ===================================================================
 # tlog_advance_cursors (1 test)
 # ===================================================================
@@ -567,6 +662,64 @@ teardown() {
 	s2=$(stat -c %s "$log2")
 	[[ "$c1" == "$s1" ]]
 	[[ "$c2" == "$s2" ]]
+}
+
+# ===================================================================
+# Cursor Write Warnings (2 tests, F-007)
+# ===================================================================
+
+@test "_tlog_write_cursor: warns on mktemp failure (F-007)" {
+	# Use a nonexistent subdirectory so mktemp cannot create temp file
+	run _tlog_write_cursor "testlog" "$TEST_TMPDIR/nonexistent_subdir" "100" "bytes"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"cursor write failed"* ]]
+	[[ "$output" == *"mktemp"* ]]
+}
+
+@test "tlog_read: cursor write failure does not crash, content still output (F-007)" {
+	# First run to set up cursor normally
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Append content
+	printf 'line four\n' >> "$LOGFILE"
+	# Create mock mktemp that always fails — put ahead of real mktemp in PATH
+	local mock_bin="$TEST_TMPDIR/mock_mktemp"
+	mkdir -p "$mock_bin"
+	printf '#!/bin/bash\nexit 1\n' > "$mock_bin/mktemp"
+	chmod +x "$mock_bin/mktemp"
+	# tlog_read outputs content BEFORE attempting cursor write
+	PATH="$mock_bin:$PATH" run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# Content still output despite cursor write failure
+	[[ "$output" == *"line four"* ]]
+	# Warning emitted on stderr (captured by run)
+	[[ "$output" == *"cursor write failed"* ]]
+}
+
+# ===================================================================
+# Cursor Write Mode Handling (3 tests, F-020)
+# ===================================================================
+
+@test "_tlog_write_cursor: explicit bytes mode writes bare number (F-020)" {
+	_tlog_write_cursor "testlog" "$BASERUN" "12345" "bytes"
+	local cursor
+	read -r cursor < "$BASERUN/testlog"
+	[[ "$cursor" == "12345" ]]
+	# FP: no L: prefix
+	[[ "$cursor" != L:* ]]
+}
+
+@test "_tlog_write_cursor: invalid mode returns exit 1 with warning (F-020)" {
+	run _tlog_write_cursor "testlog" "$BASERUN" "100" "invalid_mode"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid mode"* ]]
+	[[ "$output" == *"invalid_mode"* ]]
+}
+
+@test "FP: _tlog_write_cursor: invalid mode does not create cursor file (F-020)" {
+	run _tlog_write_cursor "testlog" "$BASERUN" "100" "invalid_mode"
+	[[ "$status" -eq 1 ]]
+	# No cursor file should be created
+	[[ ! -f "$BASERUN/testlog" ]]
 }
 
 # ===================================================================
@@ -776,4 +929,23 @@ teardown() {
 	[[ "$output" != *"XZ ROTATED SHOULD NOT APPEAR"* ]]
 	[[ "$output" != *"BZ2 ROTATED SHOULD NOT APPEAR"* ]]
 	[[ "$output" == *"appended content"* ]]
+}
+
+# ===================================================================
+# Rotation Temp File Cleanup (1 test, F-021)
+# ===================================================================
+
+@test "FP: compressed rotation leaves no orphaned temp files in BASERUN (F-021)" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Simulate rotation with .1.gz
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new file line one\n' > "$LOGFILE"
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# FP: no orphaned temp files from rotation decompression
+	local orphans
+	orphans=$(find "$BASERUN" -name ".testlog.*" -type f | wc -l)
+	[[ "$orphans" -eq 0 ]]
 }

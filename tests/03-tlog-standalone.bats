@@ -107,13 +107,13 @@ teardown() {
 @test "tlog: -v shows version and exits 0" {
 	run "$TLOG" -v
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.1"* ]]
+	[[ "$output" == *"tlog $EXPECTED_VERSION"* ]]
 }
 
 @test "tlog: --version shows version and exits 0" {
 	run "$TLOG" --version
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.1"* ]]
+	[[ "$output" == *"tlog $EXPECTED_VERSION"* ]]
 	[[ "$output" == *"Copyright"* ]]
 }
 
@@ -142,7 +142,7 @@ teardown() {
 	mv "${lib_path}.hidden" "$lib_path"
 	rm -f "$lib_backup"
 	[[ "$status" -eq 0 ]]
-	[[ "$output" == *"tlog 2.0.1"* ]]
+	[[ "$output" == *"tlog $EXPECTED_VERSION"* ]]
 }
 
 # ===================================================================
@@ -294,6 +294,23 @@ teardown() {
 	[[ "$before" == "$after" ]]
 }
 
+@test "tlog: --status with corrupt cursor shows corrupt state" {
+	printf 'garbage!!!\n' > "$BASERUN/testlog"
+	run "$TLOG" --status "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"state:  corrupt"* ]]
+}
+
+@test "tlog: FP --status with corrupt cursor does not modify cursor" {
+	printf 'garbage!!!\n' > "$BASERUN/testlog"
+	run "$TLOG" --status "testlog"
+	[[ "$status" -eq 0 ]]
+	# Cursor file must still contain the original garbage (read-only operation)
+	local cursor
+	read -r cursor < "$BASERUN/testlog"
+	[[ "$cursor" == "garbage!!!" ]]
+}
+
 # ===================================================================
 # --reset Subcommand (4 tests)
 # ===================================================================
@@ -327,6 +344,18 @@ teardown() {
 	[[ "$status" -eq 0 ]]
 	[[ ! -f "$BASERUN/.testlog.aB3xYz" ]]
 	[[ ! -f "$BASERUN/.testlog.Qw9rTp" ]]
+}
+
+@test "tlog: --reset cleans orphaned JTS temp files (F-051)" {
+	"$TLOG" "$LOGFILE" "testlog" >/dev/null 2>&1
+	# Simulate orphaned JTS mktemp files
+	touch "$BASERUN/.testlog.jts.aB3xYz"
+	touch "$BASERUN/.testlog.jts.Qw9rTp"
+	run "$TLOG" --reset "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ ! -f "$BASERUN/.testlog.jts.aB3xYz" ]]
+	[[ ! -f "$BASERUN/.testlog.jts.Qw9rTp" ]]
+	[[ "$output" == *"removed:"* ]]
 }
 
 @test "tlog: --reset with no cursor reports nothing found and creates no files" {
@@ -410,6 +439,12 @@ teardown() {
 	[[ "$output" == *"requires"* ]]
 }
 
+@test "tlog: --first-run with invalid value exits 1" {
+	run "$TLOG" --first-run yes "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid first-run mode"* ]]
+}
+
 @test "tlog: BASERUN missing for --status exits 1" {
 	run env BASERUN="/nonexistent/path" "$TLOG" --status "testlog"
 	[[ "$status" -eq 1 ]]
@@ -423,7 +458,7 @@ teardown() {
 @test "tlog: read rejects name with slash" {
 	run "$TLOG" "$LOGFILE" "../escape"
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: --reset rejects name with path traversal" {
@@ -432,7 +467,7 @@ teardown() {
 	touch "$target"
 	run "$TLOG" --reset "../victim"
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 	# File outside BASERUN must still exist
 	[[ -f "$target" ]]
 }
@@ -440,19 +475,19 @@ teardown() {
 @test "tlog: --status rejects name '..' " {
 	run "$TLOG" --status ".."
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: --adjust rejects name with embedded slash" {
 	run "$TLOG" --adjust "sub/dir" 10
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: rejects name '.'" {
 	run "$TLOG" "$LOGFILE" "."
 	[[ "$status" -eq 1 ]]
-	[[ "$output" == *"invalid cursor name"* ]]
+	[[ "$output" == *"invalid tlog_name"* ]]
 }
 
 @test "tlog: -m with invalid mode exits 1" {
@@ -471,6 +506,45 @@ teardown() {
 	run "$TLOG" "$LOGFILE" "digest.alert"
 	[[ "$status" -eq 0 ]]
 	[[ -f "$BASERUN/digest.alert" ]]
+}
+
+# ===================================================================
+# BASERUN /tmp Warning (3 tests, F-033)
+# ===================================================================
+
+@test "tlog: BASERUN=/tmp warns when root (F-033)" {
+	run env BASERUN="/tmp" "$TLOG" "$LOGFILE" "testlog"
+	# Test containers run as root
+	[[ "$output" == *"BASERUN is /tmp"* ]]
+	[[ "$output" == *"set -b/--baserun"* ]]
+}
+
+@test "FP: tlog: --full does not warn about /tmp (F-033)" {
+	run env BASERUN="/tmp" "$TLOG" --full "$LOGFILE"
+	[[ "$status" -eq 0 ]]
+	# --full does not use cursors, no /tmp warning
+	[[ "$output" != *"BASERUN is /tmp"* ]]
+}
+
+@test "FP: tlog: custom -b path suppresses /tmp warning (F-033)" {
+	run "$TLOG" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 0 ]]
+	# Custom baserun is not /tmp, no warning
+	[[ "$output" != *"BASERUN is /tmp"* ]]
+}
+
+# ===================================================================
+# Baserun Permissions Warning (1 test, F-019)
+# ===================================================================
+
+@test "tlog: world-writable BASERUN warns but succeeds (F-019)" {
+	local ww_baserun="$TEST_TMPDIR/world_writable"
+	mkdir -p "$ww_baserun"
+	chmod 777 "$ww_baserun"
+	run "$TLOG" -b "$ww_baserun" "$LOGFILE" "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"world-writable"* ]]
+	[[ -f "$ww_baserun/testlog" ]]
 }
 
 # ===================================================================
@@ -494,5 +568,66 @@ teardown() {
 	[[ -s "$stdout_file" ]]
 	# stderr should be empty
 	[[ ! -s "$stderr_file" ]]
+}
+
+# ===================================================================
+# Version Cross-Check (3 tests, F-050)
+# ===================================================================
+
+@test "tlog: CLI TLOG_VERSION matches library TLOG_LIB_VERSION (F-050)" {
+	local cli_version
+	cli_version=$(grep '^TLOG_VERSION=' "$TLOG" | head -1 | cut -d'"' -f2)
+	[[ "$cli_version" == "$TLOG_LIB_VERSION" ]]
+}
+
+@test "tlog: version mismatch between CLI and library warns (F-050)" {
+	local test_dir="$TEST_TMPDIR/ver_test"
+	mkdir -p "$test_dir"
+	cp "$TLOG" "$test_dir/tlog"
+	cp "${TLOG%/*}/tlog_lib.sh" "$test_dir/tlog_lib.sh"
+	chmod +x "$test_dir/tlog"
+	chmod 750 "$test_dir/tlog_lib.sh"
+	# Modify library version to create mismatch
+	sed -i 's/TLOG_LIB_VERSION="[^"]*"/TLOG_LIB_VERSION="0.0.0"/' "$test_dir/tlog_lib.sh"
+	run "$test_dir/tlog" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$output" == *"version mismatch"* ]]
+	[[ "$output" == *"tlog=$EXPECTED_VERSION"* ]]
+	[[ "$output" == *"lib=0.0.0"* ]]
+}
+
+@test "FP: tlog: matching versions produce no version warning (F-050)" {
+	run "$TLOG" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"version mismatch"* ]]
+}
+
+# ===================================================================
+# Library Security Check (2 tests, F-043)
+# ===================================================================
+
+@test "tlog: security check rejects world-writable library (F-043)" {
+	local test_dir="$TEST_TMPDIR/sec_test"
+	mkdir -p "$test_dir"
+	cp "$TLOG" "$test_dir/tlog"
+	cp "${TLOG%/*}/tlog_lib.sh" "$test_dir/tlog_lib.sh"
+	chmod +x "$test_dir/tlog"
+	# Make library world-writable — security check should reject
+	chmod 757 "$test_dir/tlog_lib.sh"
+	run "$test_dir/tlog" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"security check failed"* ]]
+}
+
+@test "tlog: security check rejects non-root-owned library (F-043)" {
+	local test_dir="$TEST_TMPDIR/sec_test"
+	mkdir -p "$test_dir"
+	cp "$TLOG" "$test_dir/tlog"
+	cp "${TLOG%/*}/tlog_lib.sh" "$test_dir/tlog_lib.sh"
+	chmod +x "$test_dir/tlog"
+	# Change library owner to non-root
+	chown 65534 "$test_dir/tlog_lib.sh"
+	run "$test_dir/tlog" -b "$BASERUN" "$LOGFILE" "testlog"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"security check failed"* ]]
 }
 

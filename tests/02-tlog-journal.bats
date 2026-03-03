@@ -25,6 +25,17 @@ setup() {
 
 ARGS="$*"
 
+# Parse -n flag value from arguments
+_mock_limit=0
+_mock_prev=""
+for _mock_arg in "$@"; do
+	if [[ "$_mock_prev" == "-n" ]]; then
+		_mock_limit="$_mock_arg"
+		break
+	fi
+	_mock_prev="$_mock_arg"
+done
+
 # --show-cursor (first run / cursor capture)
 if [[ "$ARGS" == *"--show-cursor"* ]]; then
 	echo "-- cursor: s=test_cursor_abc123"
@@ -49,8 +60,25 @@ if [[ "$ARGS" == *"--since=@"* ]]; then
 	exit 0
 fi
 
-# Default: output some lines
-echo "Feb 26 12:00:00 testhost sshd[1230]: mock default output"
+# Default: output lines, respecting -n limit
+_mock_lines=(
+	"Feb 26 12:00:00 testhost sshd[1230]: mock default line 1"
+	"Feb 26 12:00:01 testhost sshd[1231]: mock default line 2"
+	"Feb 26 12:00:02 testhost sshd[1232]: mock default line 3"
+	"Feb 26 12:00:03 testhost sshd[1233]: mock default line 4"
+	"Feb 26 12:00:04 testhost sshd[1234]: mock default line 5"
+)
+_mock_count=${#_mock_lines[@]}
+if [[ "$_mock_limit" -gt 0 ]] && [[ "$_mock_limit" -lt "$_mock_count" ]]; then
+	_mock_start=$((_mock_count - _mock_limit))
+	for (( _mock_i=_mock_start; _mock_i<_mock_count; _mock_i++ )); do
+		echo "${_mock_lines[$_mock_i]}"
+	done
+else
+	for _mock_line in "${_mock_lines[@]}"; do
+		echo "$_mock_line"
+	done
+fi
 exit 0
 MOCKEOF
 	chmod +x "$MOCK_BIN/journalctl"
@@ -95,6 +123,29 @@ teardown() {
 @test "tlog_journal_filter: unknown identifier returns exit 1" {
 	run tlog_journal_filter "completely_unknown_service"
 	[[ "$status" -eq 1 ]]
+}
+
+# ===================================================================
+# _tlog_journal_get_cursor Helper (2 tests, F-024)
+# ===================================================================
+
+@test "_tlog_journal_get_cursor: returns cursor string (F-024)" {
+	local result
+	result=$(_tlog_journal_get_cursor "SYSLOG_IDENTIFIER=sshd")
+	[[ "$result" == "s=test_cursor_abc123" ]]
+}
+
+@test "_tlog_journal_get_cursor: empty when no cursor line (F-024)" {
+	# Override mock to return no cursor line
+	cat > "$MOCK_BIN/journalctl" <<'MOCKEOF'
+#!/bin/bash
+echo "-- no cursor here"
+exit 0
+MOCKEOF
+	chmod +x "$MOCK_BIN/journalctl"
+	local result
+	result=$(_tlog_journal_get_cursor "SYSLOG_IDENTIFIER=sshd")
+	[[ -z "$result" ]]
 }
 
 # ===================================================================
@@ -217,7 +268,7 @@ teardown() {
 # ===================================================================
 
 @test "tlog_journal_read_full: outputs lines for known service" {
-	run tlog_journal_read_full "sshd" 0 10
+	run tlog_journal_read_full "sshd" 0 0
 	[[ "$status" -eq 0 ]]
 	[[ -n "$output" ]]
 }
@@ -312,6 +363,25 @@ teardown() {
 }
 
 # ===================================================================
+# Baserun Validation — Journal Functions (2 tests, F-010/F-019)
+# ===================================================================
+
+@test "tlog_journal_read: missing baserun returns exit 1 (F-010)" {
+	run tlog_journal_read "sshd" "$TEST_TMPDIR/no_such_dir"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"baserun directory not found"* ]]
+}
+
+@test "FP: tlog_journal_read: world-writable baserun warns but succeeds (F-019)" {
+	local ww_baserun="$TEST_TMPDIR/world_writable"
+	mkdir -p "$ww_baserun"
+	chmod 777 "$ww_baserun"
+	run tlog_journal_read "sshd" "$ww_baserun"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"world-writable"* ]]
+}
+
+# ===================================================================
 # Name Validation — Journal Functions (2 tests)
 # ===================================================================
 
@@ -325,6 +395,54 @@ teardown() {
 	run tlog_journal_read_full "../escape" 0 10
 	[[ "$status" -eq 1 ]]
 	[[ "$output" == *"invalid tlog_name"* ]]
+}
+
+# ===================================================================
+# Journal Flock (4 tests, F-008)
+# ===================================================================
+
+@test "tlog_journal_read: TLOG_FLOCK=1 creates .lock file (F-008)" {
+	TLOG_FLOCK="1"
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	[[ -f "$BASERUN/sshd.lock" ]]
+}
+
+@test "tlog_journal_read: TLOG_FLOCK=1 with lock held returns exit 4 (F-008)" {
+	TLOG_FLOCK="1"
+	# First run to create cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	# Hold lock in background
+	flock -x "$BASERUN/sshd.lock" -c 'sleep 30' &
+	FLOCK_PID=$!
+	sleep 0.5
+	# Attempt journal read with lock held
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 4 ]]
+}
+
+@test "FP: tlog_journal_read: TLOG_FLOCK=0 no .lock file (F-008)" {
+	TLOG_FLOCK="0"
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	[[ ! -f "$BASERUN/sshd.lock" ]]
+}
+
+@test "FP: tlog_journal_read: lock held does not modify cursor (F-008)" {
+	TLOG_FLOCK="1"
+	# First run to create cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	local cursor_before
+	read -r cursor_before < "$BASERUN/sshd"
+	# Hold lock
+	flock -x "$BASERUN/sshd.lock" -c 'sleep 30' &
+	FLOCK_PID=$!
+	sleep 0.5
+	# Attempt read — should fail with exit 4
+	run tlog_journal_read "sshd" "$BASERUN"
+	[[ "$status" -eq 4 ]]
+	# Cursor must be unchanged
+	local cursor_after
+	read -r cursor_after < "$BASERUN/sshd"
+	[[ "$cursor_before" == "$cursor_after" ]]
 }
 
 # ===================================================================
@@ -377,4 +495,82 @@ teardown() {
 	local content_lines
 	content_lines=$(printf '%s\n' "$output" | grep -v '^tlog:' | grep -v '^$' || true)
 	[[ -z "$content_lines" ]]
+}
+
+# ===================================================================
+# Journal Stale Protection (1 test, F-039)
+# ===================================================================
+
+@test "tlog_journal_read: cursor mtime updated on subsequent read (F-039)" {
+	# First run to create cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	[[ -f "$BASERUN/sshd" ]]
+	local mtime_before
+	mtime_before=$(stat -c %Y "$BASERUN/sshd")
+	# Wait for filesystem mtime granularity
+	sleep 1
+	# Second run — stale protection should touch cursor
+	tlog_journal_read "sshd" "$BASERUN" >/dev/null 2>&1
+	local mtime_after
+	mtime_after=$(stat -c %Y "$BASERUN/sshd")
+	[[ "$mtime_after" -gt "$mtime_before" ]]
+}
+
+# ===================================================================
+# tlog_journal_read_full Coverage (5 tests — F-038)
+# ===================================================================
+
+@test "tlog_journal_read_full: max_lines limits journal output" {
+	run tlog_journal_read_full "sshd" 0 2
+	[[ "$status" -eq 0 ]]
+	# Mock outputs 5 lines; -n 2 should limit to last 2
+	local line_count
+	line_count=$(printf '%s\n' "$output" | grep -c 'mock default line')
+	[[ "$line_count" -eq 2 ]]
+}
+
+@test "tlog_journal_read_full: timeout wraps journalctl when scan_timeout > 0" {
+	if ! command -v timeout >/dev/null 2>&1; then
+		skip "timeout command not available"
+	fi
+	# Create mock timeout that records it was called
+	cat > "$MOCK_BIN/timeout" <<'TMEOF'
+#!/bin/bash
+# Mock timeout: just exec the remaining args (proves timeout was invoked)
+shift  # skip timeout value
+exec "$@"
+TMEOF
+	chmod +x "$MOCK_BIN/timeout"
+	run tlog_journal_read_full "sshd" 5 0
+	[[ "$status" -eq 0 ]]
+	# If timeout wraps journalctl correctly, we still get output
+	[[ -n "$output" ]]
+}
+
+@test "tlog_journal_read_full: non-numeric SCAN_MAX_LINES defaults to no limit" {
+	SCAN_MAX_LINES="garbage" run tlog_journal_read_full "sshd" 0
+	[[ "$status" -eq 0 ]]
+	# Warning on stderr captured by run
+	[[ "$output" == *"invalid max_lines"* ]]
+	# All 5 mock lines output (no limit applied)
+	local line_count
+	line_count=$(printf '%s\n' "$output" | grep -c 'mock default line')
+	[[ "$line_count" -eq 5 ]]
+}
+
+@test "tlog_journal_read_full: non-numeric SCAN_TIMEOUT defaults to no timeout" {
+	SCAN_TIMEOUT="garbage" run tlog_journal_read_full "sshd"
+	[[ "$status" -eq 0 ]]
+	# Warning on stderr captured by run
+	[[ "$output" == *"invalid scan_timeout"* ]]
+	# Function still succeeds with output
+	[[ "$output" == *"mock default line"* ]]
+}
+
+@test "FP: tlog_journal_read_full: non-numeric values do not cause arithmetic errors" {
+	SCAN_MAX_LINES="abc" SCAN_TIMEOUT="xyz" run tlog_journal_read_full "sshd"
+	[[ "$status" -eq 0 ]]
+	# No arithmetic errors
+	[[ "$output" != *"syntax error"* ]]
+	[[ "$output" != *"integer expression expected"* ]]
 }

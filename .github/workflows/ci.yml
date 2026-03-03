@@ -13,10 +13,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
+      - name: Syntax check (bash -n)
+        run: bash -n files/tlog_lib.sh files/tlog tests/run-tests.sh
       - name: Shellcheck
-        run: shellcheck files/tlog_lib.sh files/tlog
+        run: shellcheck files/tlog_lib.sh files/tlog tests/run-tests.sh
 
   test:
+    needs: lint
     uses: rfxn/batsman/.github/workflows/test.yml@v1.0.2
     with:
       project-name: tlog
