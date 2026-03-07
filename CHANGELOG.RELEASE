@@ -2,6 +2,12 @@
 
   -- New Features --
 
+  [New] README: integration guide with step-by-step embedding instructions,
+      BASH_SOURCE sourcing pattern, journal registration, and install.sh setup
+  [New] README: use cases section with auth log monitoring (BFD pattern),
+      malware scanner (LMD pattern), firewall log review, and log aggregation
+  [New] README: troubleshooting section covering cursor resets, rotation
+      detection, journal unavailability, flock contention, and orphaned cursors
   [New] CLI version cross-check warns when tlog and tlog_lib.sh versions
       diverge after sourcing
   [New] Advisory warnings when baserun directory is world-writable (library)

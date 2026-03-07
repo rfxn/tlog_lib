@@ -2,6 +2,12 @@ tlog_lib CHANGELOG
 ==================
 
 - 2.0.2 | Mar 07 2026:
+  [New] README: integration guide with step-by-step embedding instructions,
+      BASH_SOURCE sourcing pattern, journal registration, and install.sh setup
+  [New] README: use cases section with auth log monitoring (BFD pattern),
+      malware scanner (LMD pattern), firewall log review, and log aggregation
+  [New] README: troubleshooting section covering cursor resets, rotation
+      detection, journal unavailability, flock contention, and orphaned cursors
   [Fix] Consistent stderr suppression in _tlog_cat_file: add 2>/dev/null
       to gzip, xz, and bzip2 branches (matching zstd/lz4) so corrupt
       archives do not emit tool errors to callers

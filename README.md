@@ -148,6 +148,190 @@ tlog -v              # version banner
 | `--reset <name>` | Delete cursor and related files |
 | `--adjust <name> <delta>` | Subtract delta from stored cursor |
 
+## Integration Guide
+
+This section walks through embedding tlog_lib in a consuming project. Both
+[BFD](https://github.com/rfxn/brute-force-detection) (intrusion detection)
+and [LMD](https://github.com/rfxn/linux-malware-detect) (malware scanning)
+use this pattern in production.
+
+### 1. Place the Library in Your Source Tree
+
+Copy `tlog_lib.sh` (and optionally the standalone `tlog` wrapper) into an
+`internals/` directory alongside your project's other libraries:
+
+```
+myproject/
+├── files/
+│   ├── myproject              # main executable
+│   └── internals/
+│       ├── internals.conf     # path discovery, binary detection
+│       └── tlog_lib.sh        # tlog library (copied from tlog_lib/files/)
+├── install.sh
+└── uninstall.sh
+```
+
+### 2. Source the Library at Startup
+
+Use `BASH_SOURCE`-relative resolution so the source path works regardless
+of where the project is installed:
+
+```bash
+# In your main library file (e.g., files/internals/myproject.lib.sh):
+_internals_dir="${BASH_SOURCE[0]%/*}"
+
+# Source tlog_lib from the same directory
+if [ -f "$_internals_dir/tlog_lib.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$_internals_dir/tlog_lib.sh"
+fi
+```
+
+Alternatively, define the path in `internals.conf` and source from the
+main executable:
+
+```bash
+# In internals.conf:
+tlog_lib="$libpath/tlog_lib.sh"
+
+# In the main script:
+# shellcheck disable=SC1090
+source "$tlog_lib"
+```
+
+### 3. Register Journal Filters
+
+If your project needs systemd journal fallback, register service-to-filter
+mappings after sourcing. The library ships with zero hardcoded service names:
+
+```bash
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
+tlog_journal_register "nginx" "_SYSTEMD_UNIT=nginx.service"
+```
+
+### 4. Install-Time Setup
+
+Your `install.sh` should copy the library, set permissions, replace the
+default BASERUN path, and create a secure cursor directory:
+
+```bash
+# Copy library into install tree
+cp files/internals/tlog_lib.sh "$INSTALL_PATH/internals/"
+chmod 750 "$INSTALL_PATH/internals/tlog_lib.sh"
+
+# If installing the standalone tlog wrapper:
+cp files/tlog "$INSTALL_PATH/internals/"
+chmod 750 "$INSTALL_PATH/internals/tlog"
+sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSTALL_PATH/tmp}\"|" \
+    "$INSTALL_PATH/internals/tlog"
+
+# Create secure cursor directory
+mkdir -p "$INSTALL_PATH/tmp"
+chown root:root "$INSTALL_PATH/tmp"
+chmod 750 "$INSTALL_PATH/tmp"
+```
+
+### 5. Minimal Working Example
+
+A complete integration in under 10 lines:
+
+```bash
+#!/bin/bash
+_internals_dir="${BASH_SOURCE[0]%/*}/internals"
+# shellcheck disable=SC1091
+. "$_internals_dir/tlog_lib.sh"
+
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+
+CURSOR_DIR="/opt/myproject/tmp"
+new_data=$(tlog_read "/var/log/auth.log" "sshd" "$CURSOR_DIR")
+[[ -n "$new_data" ]] && echo "$new_data" | grep "Failed password"
+```
+
+## Use Cases
+
+### Auth Log Monitoring (BFD Pattern)
+
+BFD reads `/var/log/auth.log` (or equivalent) every few minutes via cron,
+extracting failed login attempts for brute-force detection. Each service
+rule uses byte-mode tracking for throughput, and journal filters provide
+fallback on systems without persistent log files.
+
+```bash
+source "$INSTALL_PATH/internals/tlog_lib.sh"
+
+# Register all monitored services at startup
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
+
+# In the cron loop — read only new entries since last run
+new_lines=$(tlog_read "$AUTH_LOG" "sshd" "$TLOG_BASERUN")
+if [[ -n "$new_lines" ]]; then
+    failed=$(echo "$new_lines" | grep -c "Failed password")
+    echo "Found $failed failed login attempts"
+fi
+```
+
+### Malware Scanner (LMD Pattern)
+
+LMD uses tlog_lib in two modes: its inotify-based monitor reads filesystem
+change logs in **bytes** mode for real-time detection, while its daily alert
+digest reads in **lines** mode to produce human-readable email reports with
+complete log lines.
+
+```bash
+source "$inspath/internals/tlog_lib.sh"
+
+# Real-time monitor — bytes mode (default) for throughput
+new_data=$(tlog_read "$INOTIFY_LOG" "monitor" "$inspath/tmp")
+[[ -n "$new_data" ]] && scan_files "$new_data"
+
+# Daily digest — lines mode for clean email output
+TLOG_MODE=lines
+digest=$(tlog_read "$SCAN_LOG" "daily-digest" "$inspath/tmp" "lines")
+[[ -n "$digest" ]] && send_digest_email "$digest"
+```
+
+### Firewall Log Review
+
+Parse syslog for blocked packets and generate periodic reports. On modern
+systems with journal-only logging, tlog_read falls back to journalctl
+automatically when the log file is absent.
+
+```bash
+source /opt/fwmon/lib/tlog_lib.sh
+tlog_journal_register "iptables" "SYSLOG_IDENTIFIER=kernel"
+
+# Works with file or journal — no conditional needed
+blocked=$(tlog_read "/var/log/kern.log" "iptables" "/opt/fwmon/tmp")
+if [[ -n "$blocked" ]]; then
+    echo "$blocked" | grep "DPT=" | awk '{print $NF}' | sort | uniq -c | sort -rn
+fi
+```
+
+### Log Aggregation
+
+Advance cursors across multiple services to track which entries have been
+shipped to a central log collector, reading only new entries per cycle:
+
+```bash
+source /opt/logship/lib/tlog_lib.sh
+
+services="/var/log/auth.log|auth
+/var/log/mail.log|mail
+/var/log/nginx/access.log|nginx"
+
+# Fast-forward all cursors to current positions (first run only)
+tlog_advance_cursors "/opt/logship/tmp" "$services"
+
+# On subsequent runs, read new entries from each
+while IFS='|' read -r logfile tag; do
+    new_data=$(tlog_read "$logfile" "$tag" "/opt/logship/tmp")
+    [[ -n "$new_data" ]] && ship_to_collector "$tag" "$new_data"
+done <<< "$services"
+```
+
 ## Securing Cursor Storage
 
 Cursor files track where in a log file your application last read. An attacker
@@ -541,6 +725,44 @@ functions, and the standalone CLI wrapper (68 tests covering option
 parsing, subcommands, help/version, false-positive verification, path
 traversal rejection, mode validation, version cross-checks, and library
 security checks).
+
+## Troubleshooting
+
+### Cursor reset unexpectedly
+
+If tlog_read reports `"cursor mode mismatch"` on stderr and resets, the
+cursor file was written in one mode (bytes or lines) and read in another.
+Check that `TLOG_MODE` and explicit mode arguments are consistent across
+all call sites. A reset produces exit code 2.
+
+### Rotation not detected
+
+tlog_read detects rotation when the current file is smaller than the stored
+cursor. It looks for `<file>.1` first, then compressed variants (`.1.gz`,
+`.1.xz`, `.1.bz2`, `.1.zst`, `.1.lz4`). If the rotated file uses a
+different naming convention (e.g., date-based), tlog_read treats the
+shrinkage as a simple truncation and resets the cursor.
+
+### Journal unavailable
+
+On pre-systemd systems (CentOS 6, Ubuntu 12.04), journal functions return
+exit code 3. Callers should check the return code and fall back to file
+mode. Setting `LOG_SOURCE=file` before calling tlog_read disables journal
+fallback entirely.
+
+### Flock contention
+
+When `TLOG_FLOCK=1` is set and another process holds the cursor lock,
+tlog_read returns exit code 4 after a 5-second timeout. This is normal
+when cron and a daemon both read the same log. The caller should retry
+on the next cycle rather than treating it as a fatal error.
+
+### Orphaned cursor files
+
+Cursor files accumulate in the baserun directory as logs are added. Use
+`tlog --reset <name>` to remove a cursor and its associated `.jts` and
+`.lock` files. The `--status <name>` subcommand shows whether a cursor
+is active, its current value, and age.
 
 ## License
 
