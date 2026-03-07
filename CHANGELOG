@@ -1,7 +1,7 @@
 tlog_lib CHANGELOG
 ==================
 
-- 2.0.2 | Mar 07 2026:
+- 2.0.3 | Mar 07 2026:
   [New] README: integration guide with step-by-step embedding instructions,
       BASH_SOURCE sourcing pattern, journal registration, and install.sh setup
   [New] README: use cases section with auth log monitoring (BFD pattern),
