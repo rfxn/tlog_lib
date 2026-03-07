@@ -1,4 +1,4 @@
-- 2.0.2 | Mar 02 2026:
+- 2.0.2 | Mar 07 2026:
 
   -- New Features --
 
@@ -9,10 +9,13 @@
       -b/--baserun
   [New] tlog_journal_read() flock support via TLOG_FLOCK=1; returns exit 4
       on contention
-  [New] BATS tests: 67 new tests (196 total)
+  [New] BATS tests: 71 new tests (200 total)
 
   -- Bug Fixes --
 
+  [Fix] Consistent stderr suppression in _tlog_cat_file: add 2>/dev/null
+      to gzip, xz, and bzip2 branches (matching zstd/lz4) so corrupt
+      archives do not emit tool errors to callers
   [Fix] Rotation pipe fallback: when mktemp fails or decompression write
       fails, fall back to pipe-based decompression instead of silently
       dropping rotated content
@@ -34,5 +37,7 @@
       cursor pipeline, numeric regex, size calculation, cursor writes),
       remove CLI/library function collision, add stderr warnings on cursor
       write failures
+  [Change] Add inline comments to all || true and 2>/dev/null error
+      suppression patterns per coding conventions (8 sites)
   [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
       rejects typos with actionable error message

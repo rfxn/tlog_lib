@@ -935,6 +935,93 @@ teardown() {
 # Rotation Temp File Cleanup (1 test, F-021)
 # ===================================================================
 
+# ===================================================================
+# Rotation Pipe Fallback — _tlog_rotation_via_pipe (4 tests)
+# ===================================================================
+
+@test "rotation pipe fallback bytes: mktemp failure still outputs rotated content" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Simulate rotation: append, compress to .1.gz, start new file
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new file line one\n' > "$LOGFILE"
+	# Mock mktemp to always fail — forces pipe fallback in _tlog_handle_rotation
+	local mock_bin="$TEST_TMPDIR/mock_mktemp_rot"
+	mkdir -p "$mock_bin"
+	printf '#!/bin/bash\nexit 1\n' > "$mock_bin/mktemp"
+	chmod +x "$mock_bin/mktemp"
+	PATH="$mock_bin:$PATH" run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	# Rotated content still output via pipe fallback
+	[[ "$output" == *"line four"* ]]
+	# New file content present
+	[[ "$output" == *"new file line one"* ]]
+}
+
+@test "rotation pipe fallback bytes: emits warning message" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new file line one\n' > "$LOGFILE"
+	local mock_bin="$TEST_TMPDIR/mock_mktemp_rot2"
+	mkdir -p "$mock_bin"
+	printf '#!/bin/bash\nexit 1\n' > "$mock_bin/mktemp"
+	chmod +x "$mock_bin/mktemp"
+	PATH="$mock_bin:$PATH" run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	# Warning about pipe fallback emitted on stderr (captured by run)
+	[[ "$output" == *"pipe fallback"* ]]
+}
+
+@test "rotation pipe fallback lines: mktemp failure still outputs rotated content" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines" >/dev/null 2>&1
+	# Simulate rotation: append, compress to .1.gz, start new file
+	printf 'line four\nline five\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new line one\nnew line two\n' > "$LOGFILE"
+	# Mock mktemp to always fail
+	local mock_bin="$TEST_TMPDIR/mock_mktemp_rot3"
+	mkdir -p "$mock_bin"
+	printf '#!/bin/bash\nexit 1\n' > "$mock_bin/mktemp"
+	chmod +x "$mock_bin/mktemp"
+	PATH="$mock_bin:$PATH" run tlog_read "$LOGFILE" "testlog" "$BASERUN" "lines"
+	[[ "$status" -eq 0 ]]
+	# Rotated content from pipe fallback
+	[[ "$output" == *"line four"* ]]
+	[[ "$output" == *"line five"* ]]
+	# New file content present
+	[[ "$output" == *"new line one"* ]]
+	[[ "$output" == *"new line two"* ]]
+}
+
+@test "FP: rotation pipe fallback does not leave temp files in BASERUN" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	printf 'line four\n' >> "$LOGFILE"
+	cp "$LOGFILE" "${LOGFILE}.1.tmp"
+	gzip -c "${LOGFILE}.1.tmp" > "${LOGFILE}.1.gz"
+	rm -f "${LOGFILE}.1.tmp"
+	printf 'new file line one\n' > "$LOGFILE"
+	local mock_bin="$TEST_TMPDIR/mock_mktemp_rot4"
+	mkdir -p "$mock_bin"
+	printf '#!/bin/bash\nexit 1\n' > "$mock_bin/mktemp"
+	chmod +x "$mock_bin/mktemp"
+	# use run: mktemp failure in cursor write returns non-zero from set -e
+	PATH="$mock_bin:$PATH" run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	# FP: no orphaned temp files from failed rotation decompress
+	local orphans
+	orphans=$(find "$BASERUN" -name ".testlog.*" -type f | wc -l)
+	[[ "$orphans" -eq 0 ]]
+}
+
+# ===================================================================
+# Rotation Temp File Cleanup (1 test, F-021)
+# ===================================================================
+
 @test "FP: compressed rotation leaves no orphaned temp files in BASERUN (F-021)" {
 	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
 	# Simulate rotation with .1.gz

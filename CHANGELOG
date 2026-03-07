@@ -1,7 +1,15 @@
 tlog_lib CHANGELOG
 ==================
 
-- 2.0.2 | Mar 02 2026:
+- 2.0.2 | Mar 07 2026:
+  [Fix] Consistent stderr suppression in _tlog_cat_file: add 2>/dev/null
+      to gzip, xz, and bzip2 branches (matching zstd/lz4) so corrupt
+      archives do not emit tool errors to callers
+  [Change] Add inline comments to all || true and 2>/dev/null error
+      suppression patterns per coding conventions (8 sites)
+  [New] BATS tests: 4 new tests for _tlog_rotation_via_pipe fallback
+      path covering bytes mode, lines mode, warning output, and temp
+      file cleanup (200 total)
   [New] CLI version cross-check warns when tlog and tlog_lib.sh versions
       diverge after sourcing
   [New] Advisory warnings when baserun directory is world-writable (library)
@@ -31,7 +39,7 @@ tlog_lib CHANGELOG
   [Fix] --reset subcommand: clean up orphaned journal timestamp temp files
       alongside cursor temp files
   [Fix] README: document return codes for journal read functions
-  [New] BATS tests: 67 new tests (196 total)
+  [New] BATS tests: 71 new tests (200 total)
 
 - 2.0.1 | Mar 01 2026:
   [Fix] Library-level tlog_name path traversal validation in tlog_read,
