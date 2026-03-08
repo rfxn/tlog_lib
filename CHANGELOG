@@ -21,8 +21,8 @@ tlog_lib CHANGELOG
   [Fix] Rotation pipe fallback: when mktemp fails or decompression write
       fails, fall back to pipe-based decompression instead of silently
       dropping rotated content
-  [Fix] Consistent stderr suppression in _tlog_cat_file across all
-      decompression backends (gzip, xz, bzip2)
+  [Fix] Consistent stderr suppression across all decompression backends
+      (gzip, xz, bzip2)
   [Fix] Baserun directory validated before processing in tlog_read(),
       tlog_journal_read(), and tlog_advance_cursors()
   [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments;
@@ -34,8 +34,6 @@ tlog_lib CHANGELOG
 
   -- Changes --
 
-  [Change] Internal code cleanup: extract _tlog_handle_rotation() helper,
-      consolidate duplicated helpers, remove CLI/library function collision
   [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
       rejects typos with actionable error message
 
