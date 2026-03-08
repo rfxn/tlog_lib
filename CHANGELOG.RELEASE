@@ -1,4 +1,8 @@
-- 2.0.3 | Mar 07 2026:
+- 2.0.3 | Mar 08 2026:
+
+  -- Bug Fixes (post-release) --
+
+  [Fix] README: update version badge from 2.0.2 to 2.0.3
 
   -- New Features --
 
