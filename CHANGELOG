@@ -2,51 +2,42 @@ tlog_lib CHANGELOG
 ==================
 
 - 2.0.3 | Mar 08 2026:
-  [Fix] README: update version badge from 2.0.2 to 2.0.3
-  [New] README: integration guide with step-by-step embedding instructions,
-      BASH_SOURCE sourcing pattern, journal registration, and install.sh setup
-  [New] README: use cases section with auth log monitoring (BFD pattern),
-      malware scanner (LMD pattern), firewall log review, and log aggregation
-  [New] README: troubleshooting section covering cursor resets, rotation
-      detection, journal unavailability, flock contention, and orphaned cursors
-  [Fix] Consistent stderr suppression in _tlog_cat_file: add 2>/dev/null
-      to gzip, xz, and bzip2 branches (matching zstd/lz4) so corrupt
-      archives do not emit tool errors to callers
-  [Change] Add inline comments to all || true and 2>/dev/null error
-      suppression patterns per coding conventions (8 sites)
-  [New] BATS tests: 4 new tests for _tlog_rotation_via_pipe fallback
-      path covering bytes mode, lines mode, warning output, and temp
-      file cleanup (200 total)
+
+  -- New Features --
+
+  [New] tlog_journal_read() flock support via TLOG_FLOCK=1; returns exit 4
+      on contention
   [New] CLI version cross-check warns when tlog and tlog_lib.sh versions
       diverge after sourcing
   [New] Advisory warnings when baserun directory is world-writable (library)
       or defaults to /tmp for root users (CLI); non-fatal, directs to
       -b/--baserun
-  [New] tlog_journal_read() flock support via TLOG_FLOCK=1; returns exit 4
-      on contention
-  [Change] Extract rotation into _tlog_handle_rotation() helper; decompress
-      once to temp file
-  [Change] Internal code cleanup: consolidate duplicated helpers (journal
-      cursor pipeline, numeric regex, size calculation, cursor writes),
-      remove CLI/library function collision, add stderr warnings on cursor
-      write failures
-  [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
-      rejects typos with actionable error message
-  [Change] CI and test infrastructure: lint gating, bash -n in CI, dynamic
-      version assertions, test dedup
+  [New] README: integration guide, use cases (BFD/LMD/APF patterns), and
+      troubleshooting sections
+  [New] BATS tests: 71 new tests (200 total)
+
+  -- Bug Fixes --
+
   [Fix] Rotation pipe fallback: when mktemp fails or decompression write
       fails, fall back to pipe-based decompression instead of silently
       dropping rotated content
+  [Fix] Consistent stderr suppression in _tlog_cat_file across all
+      decompression backends (gzip, xz, bzip2)
   [Fix] Baserun directory validated before processing in tlog_read(),
       tlog_journal_read(), and tlog_advance_cursors()
   [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments;
       non-numeric values default to 0 with stderr warning
   [Fix] --status subcommand: correctly display corrupt cursor state with
-      raw content for diagnosis; add exit code note to help text
+      raw content for diagnosis
   [Fix] --reset subcommand: clean up orphaned journal timestamp temp files
       alongside cursor temp files
-  [Fix] README: document return codes for journal read functions
-  [New] BATS tests: 71 new tests (200 total)
+
+  -- Changes --
+
+  [Change] Internal code cleanup: extract _tlog_handle_rotation() helper,
+      consolidate duplicated helpers, remove CLI/library function collision
+  [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
+      rejects typos with actionable error message
 
 - 2.0.1 | Mar 01 2026:
   [Fix] Library-level tlog_name path traversal validation in tlog_read,
