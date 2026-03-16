@@ -259,8 +259,8 @@ if [[ ! -f "$_LIB" ]]; then
 fi
 
 # Security check: library must be root-owned and not world-writable
-_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null)
-_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null)
+_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null)  # stat may fail if lib deleted between checks
+_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null)  # stat may fail if lib deleted between checks
 _lib_world="${_lib_perms: -1}"
 if [[ "$_lib_owner" != "0" ]] || [[ $((_lib_world & 2)) -ne 0 ]]; then
 	echo "tlog: security check failed on $_LIB (owner=$_lib_owner perms=$_lib_perms)" >&2
@@ -356,7 +356,7 @@ _tlog_cmd_status() {
 	if [[ $parse_rc -eq 2 ]]; then
 		# Corrupt cursor: show raw content for diagnosis
 		local raw_value=""
-		read -r raw_value < "$cursor_file" 2>/dev/null || true
+		read -r raw_value < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
 		printf 'raw:    %s\n' "$raw_value"
 		printf 'state:  corrupt (would auto-reset on next read)\n'
 	elif [[ -z "$_tlog_cursor_value" ]]; then
@@ -369,7 +369,7 @@ _tlog_cmd_status() {
 		# Cursor age
 		if [[ -f "$cursor_file" ]]; then
 			local mtime now age_s
-			mtime=$(stat -c %Y "$cursor_file" 2>/dev/null) || mtime=0
+			mtime=$(stat -c %Y "$cursor_file" 2>/dev/null) || mtime=0  # stat fails if cursor removed; default to 0
 			now=$(date +%s)
 			age_s=$((now - mtime))
 			if [[ $age_s -ge 86400 ]]; then
@@ -411,7 +411,7 @@ _tlog_cmd_status() {
 	# Related files
 	if [[ -f "$BASERUN/${name}.jts" ]]; then
 		local jts_val
-		read -r jts_val < "$BASERUN/${name}.jts" 2>/dev/null || true
+		read -r jts_val < "$BASERUN/${name}.jts" 2>/dev/null || true  # read exits 1 on EOF; not an error
 		printf 'jts:    %s\n' "$jts_val"
 	fi
 	if [[ -f "$BASERUN/${name}.lock" ]]; then
@@ -440,21 +440,21 @@ _tlog_cmd_reset() {
 
 	# Cursor file
 	if [[ -f "$BASERUN/$name" ]]; then
-		rm -f "$BASERUN/$name"
+		command rm -f "$BASERUN/$name"
 		printf 'removed: %s\n' "$BASERUN/$name"
 		found=1
 	fi
 
 	# Journal timestamp
 	if [[ -f "$BASERUN/${name}.jts" ]]; then
-		rm -f "$BASERUN/${name}.jts"
+		command rm -f "$BASERUN/${name}.jts"
 		printf 'removed: %s\n' "$BASERUN/${name}.jts"
 		found=1
 	fi
 
 	# Lock file
 	if [[ -f "$BASERUN/${name}.lock" ]]; then
-		rm -f "$BASERUN/${name}.lock"
+		command rm -f "$BASERUN/${name}.lock"
 		printf 'removed: %s\n' "$BASERUN/${name}.lock"
 		found=1
 	fi
@@ -463,7 +463,7 @@ _tlog_cmd_reset() {
 	local tmpfile
 	for tmpfile in "$BASERUN"/."${name}".??????; do
 		if [[ -f "$tmpfile" ]]; then
-			rm -f "$tmpfile"
+			command rm -f "$tmpfile"
 			printf 'removed: %s\n' "$tmpfile"
 			found=1
 		fi
@@ -472,7 +472,7 @@ _tlog_cmd_reset() {
 	# Orphaned JTS temp files (mktemp pattern: .NAME.jts.XXXXXX)
 	for tmpfile in "$BASERUN"/."${name}".jts.??????; do
 		if [[ -f "$tmpfile" ]]; then
-			rm -f "$tmpfile"
+			command rm -f "$tmpfile"
 			printf 'removed: %s\n' "$tmpfile"
 			found=1
 		fi
