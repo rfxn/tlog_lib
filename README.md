@@ -1,7 +1,7 @@
 # tlog_lib — Incremental Log Reader for Bash
 
 [![CI](https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg)](https://github.com/rfxn/tlog_lib)
+[![Version](https://img.shields.io/badge/version-2.0.4-blue.svg)](https://github.com/rfxn/tlog_lib)
 [![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 [![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)](https://github.com/rfxn/tlog_lib#platform-support)

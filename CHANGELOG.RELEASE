@@ -1,35 +1,8 @@
-- 2.0.3 | Mar 08 2026:
-
-  -- New Features --
-
-  [New] tlog_journal_read() flock support via TLOG_FLOCK=1; returns exit 4
-      on contention
-  [New] CLI version cross-check warns when tlog and tlog_lib.sh versions
-      diverge after sourcing
-  [New] Advisory warnings when baserun directory is world-writable (library)
-      or defaults to /tmp for root users (CLI); non-fatal, directs to
-      -b/--baserun
-  [New] README: integration guide, use cases (BFD/LMD/APF patterns), and
-      troubleshooting sections
-  [New] BATS tests: 71 new tests (200 total)
+- 2.0.4 | Mar 16 2026:
 
   -- Bug Fixes --
 
-  [Fix] Rotation pipe fallback: when mktemp fails or decompression write
-      fails, fall back to pipe-based decompression instead of silently
-      dropping rotated content
-  [Fix] Consistent stderr suppression across all decompression backends
-      (gzip, xz, bzip2)
-  [Fix] Baserun directory validated before processing in tlog_read(),
-      tlog_journal_read(), and tlog_advance_cursors()
-  [Fix] Validate SCAN_MAX_LINES, SCAN_TIMEOUT, and max_lines arguments;
-      non-numeric values default to 0 with stderr warning
-  [Fix] --status subcommand: correctly display corrupt cursor state with
-      raw content for diagnosis
-  [Fix] --reset subcommand: clean up orphaned journal timestamp temp files
-      alongside cursor temp files
-
-  -- Changes --
-
-  [Change] CLI --first-run flag validates value (must be 'skip' or 'full');
-      rejects typos with actionable error message
+  [Fix] Replace bare rm/mv with command rm/command mv in tlog_lib.sh and
+      tlog CLI for shell alias safety on all target platforms
+  [Fix] Add inline comments to all 2>/dev/null and || true suppressions
+      per shell standards convention

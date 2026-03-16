@@ -21,7 +21,7 @@
 _TLOG_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-TLOG_LIB_VERSION="2.0.3"
+TLOG_LIB_VERSION="2.0.4"
 
 # Journal filter registry — consuming projects populate via tlog_journal_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
