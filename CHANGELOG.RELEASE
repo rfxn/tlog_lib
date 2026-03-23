@@ -1,8 +1,8 @@
-- 2.0.4 | Mar 16 2026:
+- 2.0.4 | Mar 23 2026:
 
-  -- Bug Fixes --
+  -- Changes --
 
-  [Fix] Replace bare rm/mv with command rm/command mv in tlog_lib.sh and
-      tlog CLI for shell alias safety on all target platforms
-  [Fix] Add inline comments to all 2>/dev/null and || true suppressions
-      per shell standards convention
+  [New] README restructured to rfxn documentation convention (floor level)
+  [New] SECURITY.md and CONTRIBUTING.md from RDF templates
+  [Change] Badge row updated to flat-square style with centered alignment
+  [Change] Sections reorganized to numbered format per documentation standard

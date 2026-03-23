@@ -1,48 +1,95 @@
-# tlog_lib — Incremental Log Reader for Bash
+# tlog_lib
 
-[![CI](https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-2.0.4-blue.svg)](https://github.com/rfxn/tlog_lib)
-[![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
-[![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
-[![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)](https://github.com/rfxn/tlog_lib#platform-support)
+<p align="center">
+  <a href="https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml"><img src="https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="CHANGELOG"><img src="https://img.shields.io/badge/version-2.0.4-blue.svg?style=flat-square" alt="Version"></a>
+  <a href="https://www.gnu.org/software/bash/"><img src="https://img.shields.io/badge/bash-4.1%2B-green.svg?style=flat-square" alt="Bash"></a>
+  <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html"><img src="https://img.shields.io/badge/license-GPL%20v2-orange.svg?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-linux-lightgrey.svg?style=flat-square" alt="Platform">
+</p>
 
-A shared Bash library for reading new content from growing log files using
-cursor-based position tracking. Source it into your script, call `tlog_read`,
-and get only the lines written since the last invocation — with rotation
-detection, atomic cursor writes, and optional locking built in.
+**Incremental log reading library for Bash** -- byte-offset cursors,
+flock-safe concurrent access, journal-aware log following.
+
+> (C) 2002-2026, [R-fx Networks](https://www.rfxn.com) <proj@rfxn.com> / Licensed under GNU GPL v2
+
+---
+
+## Quick Start
+
+Source `tlog_lib.sh` into your Bash script and call functions directly. This
+avoids fork/exec overhead -- each call is a function invocation, not a subprocess.
 
 ```bash
+#!/bin/bash
 source /opt/myapp/lib/tlog_lib.sh
 
-# Read new lines from syslog since last call
-tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
+# Use a project-owned directory for cursors -- never /tmp (see Security below)
+CURSOR_DIR="/opt/myapp/tmp"
+mkdir -p "$CURSOR_DIR"
+
+# Process new syslog entries since last run
+new_lines=$(tlog_read "/var/log/syslog" "syslog" "$CURSOR_DIR")
+if [[ -n "$new_lines" ]]; then
+    echo "$new_lines" | grep "ERROR" | while IFS= read -r line; do
+        echo "Alert: $line"
+    done
+fi
 ```
 
-## Features
+The standalone `tlog` wrapper provides a CLI interface for cron jobs or scripts
+that cannot source the library:
 
-- **Two tracking modes** — byte-offset (`tail -c`) for maximum throughput or
+```bash
+# Incremental read (positional -- backward compatible)
+tlog /var/log/auth.log auth_tracker
+tlog /var/log/mail.log mail_tracker lines
+
+# With option flags
+tlog -f -b /opt/myapp/tmp /var/log/syslog syslog
+
+# Full file read (no cursor tracking)
+tlog --full /var/log/syslog
+
+# Check cursor state / reset tracking
+tlog --status syslog
+tlog --reset auth
+```
+
+---
+
+## 1. Introduction
+
+tlog_lib is a shared Bash library for reading new content from growing log
+files using cursor-based position tracking. Source it into your script, call
+`tlog_read`, and get only the lines written since the last invocation -- with
+rotation detection, atomic cursor writes, and optional locking built in.
+
+### 1.1 Features
+
+- **Two tracking modes** -- byte-offset (`tail -c`) for maximum throughput or
   line-count (`tail -n`) for guaranteed whole-line output
-- **Log rotation aware** — detects `.1` and compressed variants (`.1.gz`,
+- **Log rotation aware** -- detects `.1` and compressed variants (`.1.gz`,
   `.1.xz`, `.1.bz2`, `.1.zst`, `.1.lz4`) with runtime tool detection, outputs
   the remainder from the old file plus the new file, then resets the cursor;
   works with both `create` and `copytruncate` logrotate strategies
-- **Atomic cursor writes** — `mktemp` + `mv -f` ensures cursors are never
+- **Atomic cursor writes** -- `mktemp` + `mv -f` ensures cursors are never
   empty or half-written, even on crash or OOM kill
-- **Optional flock locking** — prevents cursor corruption when multiple
+- **Optional flock locking** -- prevents cursor corruption when multiple
   processes (cron + daemon) read the same log concurrently
-- **Cursor validation** — corrupt or garbage cursor files are detected via
+- **Cursor validation** -- corrupt or garbage cursor files are detected via
   regex and auto-reset with a warning, never propagated
-- **Systemd journal support** — optional fallback to `journalctl` when the
+- **Systemd journal support** -- optional fallback to `journalctl` when the
   log file doesn't exist, with cursor and timestamp tracking
-- **Stale cursor protection** — cursor mtime is touched on every read,
+- **Stale cursor protection** -- cursor mtime is touched on every read,
   preventing mtime-based cleanup from deleting active cursors
-- **Structured exit codes** — callers can distinguish success, file errors,
+- **Structured exit codes** -- callers can distinguish success, file errors,
   cursor corruption, journal unavailability, and lock contention
-- **Zero external dependencies** — POSIX coreutils only (`stat`, `tail`, `wc`,
+- **Zero external dependencies** -- POSIX coreutils only (`stat`, `tail`, `wc`,
   `mktemp`, `mv`, `flock`); compression tools (`gzip`, `xz`, `bzip2`, `zstd`,
   `lz4`) detected at runtime and used opportunistically for rotated files
 
-## Platform Support
+### 1.2 Supported Systems
 
 tlog_lib targets deep legacy through current production distributions. All
 functions use only POSIX/coreutils primitives available across this range:
@@ -52,50 +99,329 @@ functions use only POSIX/coreutils primitives available across this range:
 | CentOS | 6, 7 | 4.1, 4.2 | No systemd on 6; journal functions gracefully skip |
 | Rocky Linux | 8, 9, 10 | 4.4, 5.1, 5.2 | Primary RHEL-family targets |
 | Debian | 12 | 5.2 | Primary test target |
-| Ubuntu | 12.04, 14.04, 20.04, 24.04 | 4.2–5.2 | No systemd on 12.04/14.04 |
+| Ubuntu | 12.04, 14.04, 20.04, 24.04 | 4.2-5.2 | No systemd on 12.04/14.04 |
 | Slackware, Gentoo, FreeBSD | Various | 4.1+ | Functional where Bash is available |
 
 **Minimum requirement: Bash 4.1** (ships with CentOS 6, released 2011). No
-Bash 4.2+ features are used — no `${var,,}`, `mapfile -d`, `declare -n`, or
+Bash 4.2+ features are used -- no `${var,,}`, `mapfile -d`, `declare -n`, or
 `$EPOCHSECONDS`. The `flock` command (util-linux) is required only when
 `TLOG_FLOCK=1`; `journalctl` only for journal functions and is gracefully
 skipped when absent.
 
-## Quick Start
+### 1.3 Tracking Modes
 
-### As a Library (Recommended)
+Every call to `tlog_read` operates in one of two modes:
 
-Source `tlog_lib.sh` into your Bash script and call functions directly. This
-avoids fork/exec overhead — each call is a function invocation, not a subprocess.
+| Mode | Cursor Unit | Reads Via | Best For |
+|------|-------------|-----------|----------|
+| `bytes` (default) | byte offset | `tail -c` | High throughput; output piped to `grep`/`awk` |
+| `lines` | line count | `tail -n` | Email digests; any context requiring complete lines |
+
+**Bytes mode** is the default and the better choice for most cases. It tracks
+the exact byte position in the file and reads precisely from that offset.
+Output may start mid-line after rotation or cursor reset, which is fine when
+piping through pattern matching.
+
+**Lines mode** guarantees every read starts and ends on a newline boundary.
+Use it when output goes directly to humans or into reports where truncated
+lines would be confusing.
+
+Mode is resolved in this order (first wins):
+
+1. Explicit function argument: `tlog_read "$file" "$name" "$dir" "lines"`
+2. Environment variable: `TLOG_MODE=lines`
+3. Default: `bytes`
+
+### 1.4 Cursor File Format
+
+Cursors are plain-text files in the `baserun` directory, named after the
+`tlog_name` argument:
+
+```
+# Byte-mode cursor (bare number):
+4096000
+
+# Line-mode cursor (L: prefix):
+L:52341
+```
+
+If a cursor was written in one mode and read in another, the library detects
+the mismatch, resets the cursor to the current file position, and emits a
+warning on stderr. This prevents unit confusion (e.g., interpreting a byte
+count as a line count).
+
+---
+
+## 2. Installation
+
+tlog_lib is designed to be embedded in your project, not installed globally.
+Copy the two files into your project tree and lock down permissions:
 
 ```bash
-#!/bin/bash
-source /opt/myapp/lib/tlog_lib.sh
+# Copy library and wrapper into your project
+cp files/tlog_lib.sh /opt/myapp/lib/
+cp files/tlog /opt/myapp/lib/
+chown root:root /opt/myapp/lib/tlog_lib.sh /opt/myapp/lib/tlog
+chmod 750 /opt/myapp/lib/tlog_lib.sh /opt/myapp/lib/tlog
 
-# Use a project-owned directory for cursors — never /tmp (see Security below)
-CURSOR_DIR="/opt/myapp/tmp"
-mkdir -p "$CURSOR_DIR"
-chmod 750 "$CURSOR_DIR"
-chown root:root "$CURSOR_DIR"
+# Create a secure cursor directory inside your install tree
+mkdir -p /opt/myapp/tmp
+chown root:root /opt/myapp/tmp
+chmod 750 /opt/myapp/tmp
 
-# Process new syslog entries since last run
-new_lines=$(tlog_read "/var/log/syslog" "syslog" "$CURSOR_DIR")
-if [[ -n "$new_lines" ]]; then
-    echo "$new_lines" | grep "ERROR" | while IFS= read -r line; do
-        # handle each error line
-        echo "Alert: $line"
-    done
+# Replace the source-tree /tmp default with your project's cursor path.
+# This is mandatory -- the source tree uses /tmp as a portable placeholder;
+# installed copies must never default to a world-writable directory.
+sed -i 's|BASERUN="${BASERUN:-/tmp}"|BASERUN="${BASERUN:-/opt/myapp/tmp}"|' \
+    /opt/myapp/lib/tlog
+```
+
+The `tlog_lib.sh` library itself has no hardcoded paths -- cursor storage is
+always passed explicitly via the `baserun` argument. The sed replacement only
+applies to the standalone `tlog` wrapper, which needs a default when no
+`BASERUN` environment variable is set.
+
+### 2.1 Integration Guide
+
+This section walks through embedding tlog_lib in a consuming project. Both
+[BFD](https://github.com/rfxn/brute-force-detection) (intrusion detection)
+and [LMD](https://github.com/rfxn/linux-malware-detect) (malware scanning)
+use this pattern in production.
+
+**Place the library in your source tree:**
+
+```
+myproject/
+-- files/
+   -- myproject              # main executable
+   -- internals/
+      -- internals.conf     # path discovery, binary detection
+      -- tlog_lib.sh        # tlog library (copied from tlog_lib/files/)
+-- install.sh
+-- uninstall.sh
+```
+
+**Source the library at startup** using `BASH_SOURCE`-relative resolution so
+the source path works regardless of where the project is installed:
+
+```bash
+# In your main library file (e.g., files/internals/myproject.lib.sh):
+_internals_dir="${BASH_SOURCE[0]%/*}"
+
+# Source tlog_lib from the same directory
+if [ -f "$_internals_dir/tlog_lib.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$_internals_dir/tlog_lib.sh"
 fi
 ```
 
-### As a Standalone Script
+Alternatively, define the path in `internals.conf` and source from the
+main executable:
+
+```bash
+# In internals.conf:
+tlog_lib="$libpath/tlog_lib.sh"
+
+# In the main script:
+# shellcheck disable=SC1090
+source "$tlog_lib"
+```
+
+**Register journal filters** if your project needs systemd journal fallback.
+The library ships with zero hardcoded service names:
+
+```bash
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
+tlog_journal_register "nginx" "_SYSTEMD_UNIT=nginx.service"
+```
+
+**Install-time setup** -- your `install.sh` should copy the library, set
+permissions, replace the default BASERUN path, and create a secure cursor
+directory:
+
+```bash
+# Copy library into install tree
+cp files/internals/tlog_lib.sh "$INSTALL_PATH/internals/"
+chmod 750 "$INSTALL_PATH/internals/tlog_lib.sh"
+
+# If installing the standalone tlog wrapper:
+cp files/tlog "$INSTALL_PATH/internals/"
+chmod 750 "$INSTALL_PATH/internals/tlog"
+sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSTALL_PATH/tmp}\"|" \
+    "$INSTALL_PATH/internals/tlog"
+
+# Create secure cursor directory
+mkdir -p "$INSTALL_PATH/tmp"
+chown root:root "$INSTALL_PATH/tmp"
+chmod 750 "$INSTALL_PATH/tmp"
+```
+
+### 2.2 Minimal Working Example
+
+A complete integration in under 10 lines:
+
+```bash
+#!/bin/bash
+_internals_dir="${BASH_SOURCE[0]%/*}/internals"
+# shellcheck disable=SC1091
+. "$_internals_dir/tlog_lib.sh"
+
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+
+CURSOR_DIR="/opt/myproject/tmp"
+new_data=$(tlog_read "/var/log/auth.log" "sshd" "$CURSOR_DIR")
+[[ -n "$new_data" ]] && echo "$new_data" | grep "Failed password"
+```
+
+---
+
+## 3. API Reference
+
+tlog_lib exposes a public function API and a set of environment variables
+for controlling behavior. All functions are designed for sourced usage inside
+Bash scripts.
+
+### 3.1 Core Functions
+
+**`tlog_read(file, tlog_name, baserun [, mode])`** -- Core incremental reader.
+Outputs new content since the last call to stdout.
+
+Arguments:
+- `file` -- path to the log file
+- `tlog_name` -- cursor identifier (becomes filename in `baserun`)
+- `baserun` -- directory for cursor storage (must be root-owned, not world-writable)
+- `mode` -- optional: `bytes` (default) or `lines`
+
+Behavior:
+- **First run** -- records current file size/lines, outputs nothing (or entire
+  file if `TLOG_FIRST_RUN=full`)
+- **Growth** -- outputs the delta between stored cursor and current size
+- **Rotation** -- detects file shrinkage, reads remainder from rotated file
+  (`.1`, `.1.gz`, `.1.xz`, `.1.bz2`, `.1.zst`, `.1.lz4`), then reads all
+  of the current file
+- **No change** -- outputs nothing, touches cursor mtime
+
+```bash
+# Basic usage -- cursor stored in project-owned directory
+tlog_read "/var/log/auth.log" "auth" "/opt/myapp/tmp"
+
+# Line mode for email digest
+tlog_read "/var/log/app.log" "digest" "/opt/myapp/tmp" "lines" > /opt/myapp/tmp/.digest.txt
+
+# With flock for concurrent access
+TLOG_FLOCK=1 tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
+```
+
+**`tlog_read_full(file, max_lines)`** -- Read an entire file without cursor
+tracking. Useful for one-shot scans.
+
+```bash
+# Entire file
+tlog_read_full "/var/log/syslog"
+
+# Last 500 lines
+tlog_read_full "/var/log/syslog" 500
+```
+
+**`tlog_adjust_cursor(tlog_name, baserun, delta_removed)`** -- Subtract a
+value from a stored cursor after an in-place log trim. Detects the cursor's
+mode automatically and uses the appropriate unit. Clamps to zero if the
+subtraction would go negative.
+
+```bash
+# After trimming 100 lines from the top of a file:
+bytes_removed=$(head -n 100 "$logfile" | wc -c)
+tail -n +101 "$logfile" > "${logfile}.tmp" && mv -f "${logfile}.tmp" "$logfile"
+tlog_adjust_cursor "mylog" "/opt/myapp/tmp" "$bytes_removed"
+```
+
+**`tlog_advance_cursors(baserun, log_pairs)`** -- Fast-forward cursors for
+multiple files to their current positions without reading content. Input is
+newline-separated `FILE|TAG` pairs.
+
+```bash
+pairs="/var/log/auth.log|auth
+/var/log/syslog|syslog
+/var/log/mail.log|mail"
+
+tlog_advance_cursors "/opt/myapp/tmp" "$pairs"
+```
+
+### 3.2 Utility Functions
+
+**`tlog_get_file_size(file)`** / **`tlog_get_line_count(file)`** -- Output
+byte size or line count on stdout.
+
+```bash
+size=$(tlog_get_file_size "/var/log/syslog")
+lines=$(tlog_get_line_count "/var/log/syslog")
+```
+
+### 3.3 Journal Functions
+
+For systems using systemd journal instead of (or alongside) traditional log
+files. Register your service mappings, then read from the journal the same
+way you would read from a file.
+
+```bash
+source /opt/myapp/lib/tlog_lib.sh
+
+# Register service-to-journalctl filter mappings
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
+
+# Incremental journal read (cursor-tracked)
+tlog_journal_read "sshd" "/opt/myapp/tmp"
+
+# Full journal read (no cursor, with timeout and line limit)
+tlog_journal_read_full "postfix" 30 1000
+```
+
+**`tlog_journal_register(name, filter)`** -- register a mapping from a
+logical name to a journalctl filter string.
+
+**`tlog_journal_filter(name)`** -- look up the filter for a registered name.
+Returns 1 for unregistered names.
+
+**`tlog_journal_read(tlog_name, baserun)`** -- cursor-based journal reader.
+First run captures the cursor position and outputs nothing. Subsequent runs
+output new entries since the stored cursor, with timestamp fallback.
+Returns 0 on success, 1 for unregistered service or invalid arguments,
+3 if `journalctl` is not available, 4 if lock acquisition fails
+(`TLOG_FLOCK=1` only).
+
+**`tlog_journal_read_full(tlog_name, scan_timeout, max_lines)`** -- full
+journal read without cursor tracking. Supports timeout (via `timeout` command)
+and line limits. Returns 0 on success, 1 for unregistered service, 3 if
+`journalctl` is not available.
+
+### 3.4 Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TLOG_MODE` | `bytes` | Default tracking mode when not passed as argument |
+| `TLOG_FLOCK` | `0` | Set to `1` to enable flock-based cursor locking |
+| `TLOG_FIRST_RUN` | `skip` | First-run behavior: `skip` (no output) or `full` (entire file) |
+| `LOG_SOURCE` | -- | Set to `file` to disable journal fallback when a file is missing |
+| `SCAN_TIMEOUT` | `0` | Journal full-read timeout in seconds |
+| `SCAN_MAX_LINES` | `0` | Journal full-read line limit |
+
+---
+
+## 4. Usage
+
+This section covers common usage patterns, the standalone CLI wrapper,
+and exit codes for both the library and CLI.
+
+### 4.1 Standalone CLI
 
 The `tlog` wrapper provides a CLI interface for use from cron jobs or scripts
-that can't source the library. It supports the original positional interface
+that cannot source the library. It supports the original positional interface
 plus option flags and subcommands:
 
 ```bash
-# Incremental read (positional — backward compatible)
+# Incremental read (positional -- backward compatible)
 tlog /var/log/auth.log auth_tracker
 tlog /var/log/mail.log mail_tracker lines
 
@@ -148,115 +474,11 @@ tlog -v              # version banner
 | `--reset <name>` | Delete cursor and related files |
 | `--adjust <name> <delta>` | Subtract delta from stored cursor |
 
-## Integration Guide
+### 4.2 Use Cases
 
-This section walks through embedding tlog_lib in a consuming project. Both
-[BFD](https://github.com/rfxn/brute-force-detection) (intrusion detection)
-and [LMD](https://github.com/rfxn/linux-malware-detect) (malware scanning)
-use this pattern in production.
-
-### 1. Place the Library in Your Source Tree
-
-Copy `tlog_lib.sh` (and optionally the standalone `tlog` wrapper) into an
-`internals/` directory alongside your project's other libraries:
-
-```
-myproject/
-├── files/
-│   ├── myproject              # main executable
-│   └── internals/
-│       ├── internals.conf     # path discovery, binary detection
-│       └── tlog_lib.sh        # tlog library (copied from tlog_lib/files/)
-├── install.sh
-└── uninstall.sh
-```
-
-### 2. Source the Library at Startup
-
-Use `BASH_SOURCE`-relative resolution so the source path works regardless
-of where the project is installed:
-
-```bash
-# In your main library file (e.g., files/internals/myproject.lib.sh):
-_internals_dir="${BASH_SOURCE[0]%/*}"
-
-# Source tlog_lib from the same directory
-if [ -f "$_internals_dir/tlog_lib.sh" ]; then
-    # shellcheck disable=SC1091
-    . "$_internals_dir/tlog_lib.sh"
-fi
-```
-
-Alternatively, define the path in `internals.conf` and source from the
-main executable:
-
-```bash
-# In internals.conf:
-tlog_lib="$libpath/tlog_lib.sh"
-
-# In the main script:
-# shellcheck disable=SC1090
-source "$tlog_lib"
-```
-
-### 3. Register Journal Filters
-
-If your project needs systemd journal fallback, register service-to-filter
-mappings after sourcing. The library ships with zero hardcoded service names:
-
-```bash
-tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
-tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
-tlog_journal_register "nginx" "_SYSTEMD_UNIT=nginx.service"
-```
-
-### 4. Install-Time Setup
-
-Your `install.sh` should copy the library, set permissions, replace the
-default BASERUN path, and create a secure cursor directory:
-
-```bash
-# Copy library into install tree
-cp files/internals/tlog_lib.sh "$INSTALL_PATH/internals/"
-chmod 750 "$INSTALL_PATH/internals/tlog_lib.sh"
-
-# If installing the standalone tlog wrapper:
-cp files/tlog "$INSTALL_PATH/internals/"
-chmod 750 "$INSTALL_PATH/internals/tlog"
-sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSTALL_PATH/tmp}\"|" \
-    "$INSTALL_PATH/internals/tlog"
-
-# Create secure cursor directory
-mkdir -p "$INSTALL_PATH/tmp"
-chown root:root "$INSTALL_PATH/tmp"
-chmod 750 "$INSTALL_PATH/tmp"
-```
-
-### 5. Minimal Working Example
-
-A complete integration in under 10 lines:
-
-```bash
-#!/bin/bash
-_internals_dir="${BASH_SOURCE[0]%/*}/internals"
-# shellcheck disable=SC1091
-. "$_internals_dir/tlog_lib.sh"
-
-tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
-
-CURSOR_DIR="/opt/myproject/tmp"
-new_data=$(tlog_read "/var/log/auth.log" "sshd" "$CURSOR_DIR")
-[[ -n "$new_data" ]] && echo "$new_data" | grep "Failed password"
-```
-
-## Use Cases
-
-### Auth Log Monitoring (BFD Pattern)
-
-BFD reads `/var/log/auth.log` (or equivalent) every few minutes via cron,
-extracting failed login attempts for brute-force detection. Each service
-rule uses byte-mode tracking for throughput, and journal filters provide
-fallback on systems without persistent log files.
+**Auth Log Monitoring (BFD Pattern)** -- BFD reads `/var/log/auth.log` (or
+equivalent) every few minutes via cron, extracting failed login attempts for
+brute-force detection:
 
 ```bash
 source "$INSTALL_PATH/internals/tlog_lib.sh"
@@ -265,7 +487,7 @@ source "$INSTALL_PATH/internals/tlog_lib.sh"
 tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
 tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
 
-# In the cron loop — read only new entries since last run
+# In the cron loop -- read only new entries since last run
 new_lines=$(tlog_read "$AUTH_LOG" "sshd" "$TLOG_BASERUN")
 if [[ -n "$new_lines" ]]; then
     failed=$(echo "$new_lines" | grep -c "Failed password")
@@ -273,47 +495,41 @@ if [[ -n "$new_lines" ]]; then
 fi
 ```
 
-### Malware Scanner (LMD Pattern)
-
-LMD uses tlog_lib in two modes: its inotify-based monitor reads filesystem
-change logs in **bytes** mode for real-time detection, while its daily alert
-digest reads in **lines** mode to produce human-readable email reports with
-complete log lines.
+**Malware Scanner (LMD Pattern)** -- LMD uses tlog_lib in two modes: its
+inotify-based monitor reads filesystem change logs in bytes mode for real-time
+detection, while its daily alert digest reads in lines mode for human-readable
+email reports:
 
 ```bash
 source "$inspath/internals/tlog_lib.sh"
 
-# Real-time monitor — bytes mode (default) for throughput
+# Real-time monitor -- bytes mode (default) for throughput
 new_data=$(tlog_read "$INOTIFY_LOG" "monitor" "$inspath/tmp")
 [[ -n "$new_data" ]] && scan_files "$new_data"
 
-# Daily digest — lines mode for clean email output
+# Daily digest -- lines mode for clean email output
 TLOG_MODE=lines
 digest=$(tlog_read "$SCAN_LOG" "daily-digest" "$inspath/tmp" "lines")
 [[ -n "$digest" ]] && send_digest_email "$digest"
 ```
 
-### Firewall Log Review
-
-Parse syslog for blocked packets and generate periodic reports. On modern
-systems with journal-only logging, tlog_read falls back to journalctl
-automatically when the log file is absent.
+**Firewall Log Review** -- Parse syslog for blocked packets and generate
+periodic reports. On modern systems with journal-only logging, tlog_read
+falls back to journalctl automatically when the log file is absent:
 
 ```bash
 source /opt/fwmon/lib/tlog_lib.sh
 tlog_journal_register "iptables" "SYSLOG_IDENTIFIER=kernel"
 
-# Works with file or journal — no conditional needed
+# Works with file or journal -- no conditional needed
 blocked=$(tlog_read "/var/log/kern.log" "iptables" "/opt/fwmon/tmp")
 if [[ -n "$blocked" ]]; then
     echo "$blocked" | grep "DPT=" | awk '{print $NF}' | sort | uniq -c | sort -rn
 fi
 ```
 
-### Log Aggregation
-
-Advance cursors across multiple services to track which entries have been
-shipped to a central log collector, reading only new entries per cycle:
+**Log Aggregation** -- Advance cursors across multiple services to track
+which entries have been shipped to a central log collector:
 
 ```bash
 source /opt/logship/lib/tlog_lib.sh
@@ -332,244 +548,17 @@ while IFS='|' read -r logfile tag; do
 done <<< "$services"
 ```
 
-## Securing Cursor Storage
+### 4.3 Examples
 
-Cursor files track where in a log file your application last read. An attacker
-who can write to cursor files can cause your application to skip log entries
-(hiding intrusion evidence) or re-process old entries (triggering false
-alerts). The cursor directory must be treated as security-sensitive state.
-
-**Rules:**
-
-1. **Never use `/tmp` or any world-writable directory** for cursor storage.
-   The source tree defaults `BASERUN` to `/tmp` for portability — your
-   installer must replace this with a project-controlled path (see
-   [Installation](#installation)).
-
-2. **Own the directory as root** with restrictive permissions:
-   ```bash
-   mkdir -p /opt/myapp/tmp
-   chown root:root /opt/myapp/tmp
-   chmod 750 /opt/myapp/tmp
-   ```
-
-3. **Place cursors inside your application's install tree** (e.g.,
-   `/opt/myapp/tmp/`, `/usr/local/myapp/tmp/`). This keeps cursor files
-   under the same ownership and access controls as the application itself.
-
-4. **The standalone `tlog` script validates `tlog_lib.sh` before sourcing**:
-   it checks that the library is owned by root and not world-writable. This
-   prevents a local privilege escalation where a tampered library is sourced
-   by a root-owned cron job.
-
-**What can go wrong with `/tmp`:**
-
-| Attack | Impact |
-|--------|--------|
-| Symlink attack — attacker creates `$BASERUN/syslog` as symlink to `/etc/passwd` | Cursor write overwrites the target file |
-| Cursor poisoning — attacker writes a crafted value to the cursor file | Application skips log data or re-reads old data |
-| State leakage — cursor filenames reveal which logs your application monitors | Information disclosure to unprivileged local users |
-| Race condition — attacker deletes cursor between read and write | Application falls back to first-run, potentially re-processing entire log |
-
-## Tracking Modes
-
-Every call to `tlog_read` operates in one of two modes:
-
-| Mode | Cursor Unit | Reads Via | Best For |
-|------|-------------|-----------|----------|
-| `bytes` (default) | byte offset | `tail -c` | High throughput; output piped to `grep`/`awk` |
-| `lines` | line count | `tail -n` | Email digests; any context requiring complete lines |
-
-**Bytes mode** is the default and the better choice for most cases. It tracks
-the exact byte position in the file and reads precisely from that offset.
-Output may start mid-line after rotation or cursor reset, which is fine when
-piping through pattern matching.
-
-**Lines mode** guarantees every read starts and ends on a newline boundary.
-Use it when output goes directly to humans or into reports where truncated
-lines would be confusing.
-
-### Setting the Mode
-
-Mode is resolved in this order (first wins):
-
-1. Explicit function argument: `tlog_read "$file" "$name" "$dir" "lines"`
-2. Environment variable: `TLOG_MODE=lines`
-3. Default: `bytes`
-
-### Cursor File Format
-
-Cursors are plain-text files in the `baserun` directory, named after the
-`tlog_name` argument:
-
-```
-# Byte-mode cursor (bare number):
-4096000
-
-# Line-mode cursor (L: prefix):
-L:52341
-```
-
-If a cursor was written in one mode and read in another, the library detects
-the mismatch, resets the cursor to the current file position, and emits a
-warning on stderr. This prevents unit confusion (e.g., interpreting a byte
-count as a line count).
-
-## API Reference
-
-### tlog_read(file, tlog_name, baserun [, mode])
-
-Core incremental reader. Outputs new content since the last call to stdout.
-
-**Arguments:**
-- `file` — path to the log file
-- `tlog_name` — cursor identifier (becomes filename in `baserun`)
-- `baserun` — directory for cursor storage (must be root-owned, not world-writable)
-- `mode` — optional: `bytes` (default) or `lines`
-
-**Behavior:**
-- **First run** — records current file size/lines, outputs nothing (or entire
-  file if `TLOG_FIRST_RUN=full`)
-- **Growth** — outputs the delta between stored cursor and current size
-- **Rotation** — detects file shrinkage, reads remainder from rotated file
-  (`.1`, `.1.gz`, `.1.xz`, `.1.bz2`, `.1.zst`, `.1.lz4`), then reads all
-  of the current file
-- **No change** — outputs nothing, touches cursor mtime
-
-**Returns:** 0 on success, 1 on invalid input (missing file, bad path,
-invalid mode), 2 on cursor corruption (auto-reset), 3 if journal
-unavailable, 4 if lock not acquired.
-
-```bash
-# Basic usage — cursor stored in project-owned directory
-tlog_read "/var/log/auth.log" "auth" "/opt/myapp/tmp"
-
-# Line mode for email digest
-tlog_read "/var/log/app.log" "digest" "/opt/myapp/tmp" "lines" > /opt/myapp/tmp/.digest.txt
-
-# With flock for concurrent access
-TLOG_FLOCK=1 tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
-```
-
-### tlog_read_full(file, max_lines)
-
-Read an entire file without cursor tracking. Useful for one-shot scans.
-
-```bash
-# Entire file
-tlog_read_full "/var/log/syslog"
-
-# Last 500 lines
-tlog_read_full "/var/log/syslog" 500
-```
-
-### tlog_adjust_cursor(tlog_name, baserun, delta_removed)
-
-Subtract a value from a stored cursor after an in-place log trim. Detects
-the cursor's mode automatically and uses the appropriate unit. Clamps to
-zero if the subtraction would go negative.
-
-```bash
-# After trimming 100 lines from the top of a file:
-bytes_removed=$(head -n 100 "$logfile" | wc -c)
-# Trim the file (preserve inode for inotifywait / tail -f consumers)
-tail -n +101 "$logfile" > "${logfile}.tmp" && mv -f "${logfile}.tmp" "$logfile"
-# Adjust the byte-mode cursor
-tlog_adjust_cursor "mylog" "/opt/myapp/tmp" "$bytes_removed"
-```
-
-### tlog_advance_cursors(baserun, log_pairs)
-
-Fast-forward cursors for multiple files to their current positions without
-reading content. Input is newline-separated `FILE|TAG` pairs.
-
-```bash
-pairs="/var/log/auth.log|auth
-/var/log/syslog|syslog
-/var/log/mail.log|mail"
-
-tlog_advance_cursors "/opt/myapp/tmp" "$pairs"
-```
-
-### tlog_get_file_size(file) / tlog_get_line_count(file)
-
-Utility functions that output byte size or line count on stdout.
-
-```bash
-size=$(tlog_get_file_size "/var/log/syslog")
-lines=$(tlog_get_line_count "/var/log/syslog")
-```
-
-### Journal Functions
-
-For systems using systemd journal instead of (or alongside) traditional log
-files. Register your service mappings, then read from the journal the same
-way you'd read from a file.
-
-```bash
-source /opt/myapp/lib/tlog_lib.sh
-
-# Register service-to-journalctl filter mappings
-tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
-tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
-
-# Incremental journal read (cursor-tracked)
-tlog_journal_read "sshd" "/opt/myapp/tmp"
-
-# Full journal read (no cursor, with timeout and line limit)
-tlog_journal_read_full "postfix" 30 1000
-```
-
-**`tlog_journal_register(name, filter)`** — register a mapping from a
-logical name to a journalctl filter string.
-
-**`tlog_journal_filter(name)`** — look up the filter for a registered name.
-Returns 1 for unregistered names.
-
-**`tlog_journal_read(tlog_name, baserun)`** — cursor-based journal reader.
-First run captures the cursor position and outputs nothing. Subsequent runs
-output new entries since the stored cursor, with timestamp fallback.
-Returns 0 on success, 1 for unregistered service or invalid arguments,
-3 if `journalctl` is not available, 4 if lock acquisition fails
-(`TLOG_FLOCK=1` only).
-
-**`tlog_journal_read_full(tlog_name, scan_timeout, max_lines)`** — full
-journal read without cursor tracking. Supports timeout (via `timeout` command)
-and line limits. Returns 0 on success, 1 for unregistered service, 3 if
-`journalctl` is not available.
-
-## Environment Variables
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `TLOG_MODE` | `bytes` | Default tracking mode when not passed as argument |
-| `TLOG_FLOCK` | `0` | Set to `1` to enable flock-based cursor locking |
-| `TLOG_FIRST_RUN` | `skip` | First-run behavior: `skip` (no output) or `full` (entire file) |
-| `LOG_SOURCE` | — | Set to `file` to disable journal fallback when a file is missing |
-| `SCAN_TIMEOUT` | `0` | Journal full-read timeout in seconds |
-| `SCAN_MAX_LINES` | `0` | Journal full-read line limit |
-
-## Exit Codes
-
-| Code | Meaning | Recommended Action |
-|------|---------|-------------------|
-| 0 | Success (content output or no new content) | Continue normally |
-| 1 | Invalid input (missing file, bad path, invalid mode, bad cursor name) | Check arguments |
-| 2 | Cursor corrupt (auto-reset performed) | Log warning, continue |
-| 3 | Journal unavailable (`journalctl` not found) | Fall back to file mode |
-| 4 | Lock acquisition failed (`TLOG_FLOCK=1`) | Retry on next cycle |
-
-## Examples
-
-### Monitor a Log File from Cron
+**Monitor a Log File from Cron:**
 
 ```bash
 #!/bin/bash
-# /etc/cron.d/check-errors — run every 5 minutes
+# /etc/cron.d/check-errors -- run every 5 minutes
 source /opt/myapp/lib/tlog_lib.sh
 
 # Cursor directory: project-owned, root:root 750
-# Never use /tmp — cron runs as root and cursors become symlink targets
+# Never use /tmp -- cron runs as root and cursors become symlink targets
 CURSOR_DIR="/opt/myapp/tmp"
 
 errors=$(tlog_read "/var/log/myapp/error.log" "errors" "$CURSOR_DIR")
@@ -578,11 +567,8 @@ if [[ -n "$errors" ]]; then
 fi
 ```
 
-### Concurrent Daemon + Cron
-
-When a long-running daemon and a cron job both read the same log, enable
-flock to prevent cursor races. Both processes must use the same `baserun`
-directory so they share the cursor file and its `.lock`:
+**Concurrent Daemon + Cron** -- When a long-running daemon and a cron job
+both read the same log, enable flock to prevent cursor races:
 
 ```bash
 # In the daemon loop:
@@ -598,11 +584,11 @@ export TLOG_FLOCK=1
 tlog_read "/var/log/events.log" "events" "/opt/myapp/tmp" | generate_report
 ```
 
-The flock uses `$baserun/${tlog_name}.lock` — a separate file from the cursor
+The flock uses `$baserun/${tlog_name}.lock` -- a separate file from the cursor
 itself. The lock is held only for the duration of the read-modify-write cycle,
 not while processing output.
 
-### Line-Mode Digest Email
+**Line-Mode Digest Email:**
 
 ```bash
 #!/bin/bash
@@ -621,25 +607,19 @@ fi
 rm -f "$digest_tmp"
 ```
 
-### Handle Log Rotation Gracefully
-
-No special handling needed — `tlog_read` detects rotation automatically:
+**Handle Log Rotation Gracefully** -- No special handling needed:
 
 ```bash
 # This works even when logrotate runs between calls.
 # If /var/log/syslog was rotated to /var/log/syslog.1 (or .1.gz,
 # .1.xz, .1.bz2, .1.zst, .1.lz4), tlog_read outputs the remainder
 # from the rotated file, then the full content of the new file.
-# Compressed rotated files are decompressed via pipe — never on disk.
+# Compressed rotated files are decompressed via pipe -- never on disk.
 # Works with both 'create' and 'copytruncate' logrotate strategies.
 tlog_read "/var/log/syslog" "syslog" "/opt/myapp/tmp"
 ```
 
-### Adjust Cursor After In-Place Trim
-
-When you trim lines from the top of a log file (preserving the inode for
-`inotifywait` or `tail -f` consumers), adjust the cursor so it doesn't
-skip content or re-read old lines:
+**Adjust Cursor After In-Place Trim:**
 
 ```bash
 trim=1000  # lines to remove from top
@@ -652,16 +632,13 @@ tail -n +"$((trim + 1))" "$logfile" > "${logfile}.tmp"
 cat "${logfile}.tmp" > "$logfile"
 rm -f "${logfile}.tmp"
 
-# Adjust the cursor — mode-aware, clamps to 0 on over-subtraction
+# Adjust the cursor -- mode-aware, clamps to 0 on over-subtraction
 tlog_adjust_cursor "mylog" "/opt/myapp/tmp" "$bytes_removed"
 ```
 
-### Journal Fallback
-
-On journal-only systems (no persistent `/var/log/` files), register your
-service mappings and `tlog_read` falls back to `journalctl` automatically
-when the file argument doesn't exist. This covers CentOS 7+ and modern
-distributions where syslog may not write traditional files:
+**Journal Fallback** -- On journal-only systems (no persistent `/var/log/`
+files), register your service mappings and `tlog_read` falls back to
+`journalctl` automatically when the file argument doesn't exist:
 
 ```bash
 source /opt/myapp/lib/tlog_lib.sh
@@ -681,36 +658,60 @@ LOG_SOURCE=file tlog_read "/var/log/auth.log" "sshd" "/opt/myapp/tmp"
 On pre-systemd systems (CentOS 6, Ubuntu 12.04/14.04), journal functions
 return exit code 3 and the caller can handle the fallback as needed.
 
-## Installation
+### 4.4 Exit Codes
 
-tlog_lib is designed to be embedded in your project, not installed globally.
-Copy the two files into your project tree and lock down permissions:
+| Code | Meaning | Recommended Action |
+|------|---------|-------------------|
+| 0 | Success (content output or no new content) | Continue normally |
+| 1 | Invalid input (missing file, bad path, invalid mode, bad cursor name) | Check arguments |
+| 2 | Cursor corrupt (auto-reset performed) | Log warning, continue |
+| 3 | Journal unavailable (`journalctl` not found) | Fall back to file mode |
+| 4 | Lock acquisition failed (`TLOG_FLOCK=1`) | Retry on next cycle |
 
-```bash
-# Copy library and wrapper into your project
-cp files/tlog_lib.sh /opt/myapp/lib/
-cp files/tlog /opt/myapp/lib/
-chown root:root /opt/myapp/lib/tlog_lib.sh /opt/myapp/lib/tlog
-chmod 750 /opt/myapp/lib/tlog_lib.sh /opt/myapp/lib/tlog
+---
 
-# Create a secure cursor directory inside your install tree
-mkdir -p /opt/myapp/tmp
-chown root:root /opt/myapp/tmp
-chmod 750 /opt/myapp/tmp
+## 5. Security
 
-# Replace the source-tree /tmp default with your project's cursor path.
-# This is mandatory — the source tree uses /tmp as a portable placeholder;
-# installed copies must never default to a world-writable directory.
-sed -i 's|BASERUN="${BASERUN:-/tmp}"|BASERUN="${BASERUN:-/opt/myapp/tmp}"|' \
-    /opt/myapp/lib/tlog
-```
+Cursor files track where in a log file your application last read. An attacker
+who can write to cursor files can cause your application to skip log entries
+(hiding intrusion evidence) or re-process old entries (triggering false
+alerts). The cursor directory must be treated as security-sensitive state.
 
-The `tlog_lib.sh` library itself has no hardcoded paths — cursor storage is
-always passed explicitly via the `baserun` argument. The sed replacement only
-applies to the standalone `tlog` wrapper, which needs a default when no
-`BASERUN` environment variable is set.
+### 5.1 Cursor Storage Rules
 
-## Testing
+1. **Never use `/tmp` or any world-writable directory** for cursor storage.
+   The source tree defaults `BASERUN` to `/tmp` for portability -- your
+   installer must replace this with a project-controlled path (see
+   [Installation](#2-installation)).
+
+2. **Own the directory as root** with restrictive permissions:
+   ```bash
+   mkdir -p /opt/myapp/tmp
+   chown root:root /opt/myapp/tmp
+   chmod 750 /opt/myapp/tmp
+   ```
+
+3. **Place cursors inside your application's install tree** (e.g.,
+   `/opt/myapp/tmp/`, `/usr/local/myapp/tmp/`). This keeps cursor files
+   under the same ownership and access controls as the application itself.
+
+4. **The standalone `tlog` script validates `tlog_lib.sh` before sourcing**:
+   it checks that the library is owned by root and not world-writable. This
+   prevents a local privilege escalation where a tampered library is sourced
+   by a root-owned cron job.
+
+### 5.2 Threat Model
+
+| Attack | Impact |
+|--------|--------|
+| Symlink attack -- attacker creates `$BASERUN/syslog` as symlink to `/etc/passwd` | Cursor write overwrites the target file |
+| Cursor poisoning -- attacker writes a crafted value to the cursor file | Application skips log data or re-reads old data |
+| State leakage -- cursor filenames reveal which logs your application monitors | Information disclosure to unprivileged local users |
+| Race condition -- attacker deletes cursor between read and write | Application falls back to first-run, potentially re-processing entire log |
+
+---
+
+## 6. Testing
 
 ```bash
 make -C tests test           # Debian 12 (primary)
@@ -726,16 +727,20 @@ parsing, subcommands, help/version, false-positive verification, path
 traversal rejection, mode validation, version cross-checks, and library
 security checks).
 
-## Troubleshooting
+---
 
-### Cursor reset unexpectedly
+## 7. Troubleshooting
+
+Common issues and their resolutions when using tlog_lib.
+
+### 7.1 Cursor Reset Unexpectedly
 
 If tlog_read reports `"cursor mode mismatch"` on stderr and resets, the
 cursor file was written in one mode (bytes or lines) and read in another.
 Check that `TLOG_MODE` and explicit mode arguments are consistent across
 all call sites. A reset produces exit code 2.
 
-### Rotation not detected
+### 7.2 Rotation Not Detected
 
 tlog_read detects rotation when the current file is smaller than the stored
 cursor. It looks for `<file>.1` first, then compressed variants (`.1.gz`,
@@ -743,30 +748,38 @@ cursor. It looks for `<file>.1` first, then compressed variants (`.1.gz`,
 different naming convention (e.g., date-based), tlog_read treats the
 shrinkage as a simple truncation and resets the cursor.
 
-### Journal unavailable
+### 7.3 Journal Unavailable
 
 On pre-systemd systems (CentOS 6, Ubuntu 12.04), journal functions return
 exit code 3. Callers should check the return code and fall back to file
 mode. Setting `LOG_SOURCE=file` before calling tlog_read disables journal
 fallback entirely.
 
-### Flock contention
+### 7.4 Flock Contention
 
 When `TLOG_FLOCK=1` is set and another process holds the cursor lock,
 tlog_read returns exit code 4 after a 5-second timeout. This is normal
 when cron and a daemon both read the same log. The caller should retry
 on the next cycle rather than treating it as a fatal error.
 
-### Orphaned cursor files
+### 7.5 Orphaned Cursor Files
 
 Cursor files accumulate in the baserun directory as logs are added. Use
 `tlog --reset <name>` to remove a cursor and its associated `.jts` and
 `.lock` files. The `--status <name>` subcommand shows whether a cursor
 is active, its current value, and age.
 
+---
+
 ## License
 
 Copyright (C) 2002-2026, [R-fx Networks](https://www.rfxn.com)
-— Ryan MacDonald <ryan@rfxn.com>
+-- Ryan MacDonald <ryan@rfxn.com>
 
 GNU General Public License v2. See the source files for the full license text.
+
+## Support
+
+- **Bug reports**: [GitHub Issues](https://github.com/rfxn/tlog_lib/issues)
+- **Security vulnerabilities**: See [SECURITY.md](SECURITY.md)
+- **Contact**: proj@rfxn.com

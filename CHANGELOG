@@ -1,6 +1,15 @@
 tlog_lib CHANGELOG
 ==================
 
+- 2.0.4 | Mar 23 2026:
+
+  -- Changes --
+
+  [New] README restructured to rfxn documentation convention (floor level)
+  [New] SECURITY.md and CONTRIBUTING.md from RDF templates
+  [Change] Badge row updated to flat-square style with centered alignment
+  [Change] Sections reorganized to numbered format per documentation standard
+
 - 2.0.4 | Mar 16 2026:
 
   -- Bug Fixes --
