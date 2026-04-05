@@ -1036,3 +1036,90 @@ teardown() {
 	orphans=$(find "$BASERUN" -name ".testlog.*" -type f | wc -l)
 	[[ "$orphans" -eq 0 ]]
 }
+
+# ===================================================================
+# Symlink Guards (6 tests)
+# ===================================================================
+
+@test "symlink cursor file: detected and reset with exit 2" {
+	# Create a normal cursor via first run
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Replace cursor with a symlink to a file containing a valid number
+	local target="$TEST_TMPDIR/symlink_target"
+	printf '999\n' > "$target"
+	rm -f "$BASERUN/testlog"
+	ln -s "$target" "$BASERUN/testlog"
+	# tlog_read should detect the symlink and reset
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 2 ]]
+	[[ "$output" == *"symlink detected"* ]]
+}
+
+@test "symlink cursor file: cursor rebuilt after detection" {
+	# First run to establish cursor
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	# Replace cursor with symlink
+	local target="$TEST_TMPDIR/symlink_target2"
+	printf '0\n' > "$target"
+	rm -f "$BASERUN/testlog"
+	ln -s "$target" "$BASERUN/testlog"
+	# Detection returns exit 2 (corrupt/reset) — expected, use run
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 2 ]]
+	# _tlog_write_cursor used mv -f which replaced the symlink with a real file
+	[[ ! -L "$BASERUN/testlog" ]]
+	[[ -f "$BASERUN/testlog" ]]
+}
+
+@test "FP: symlink cursor file: target file not modified by reset" {
+	tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes" >/dev/null 2>&1
+	local target="$TEST_TMPDIR/innocent_file"
+	printf 'original content\n' > "$target"
+	rm -f "$BASERUN/testlog"
+	ln -s "$target" "$BASERUN/testlog"
+	# Reset via tlog_read — returns exit 2 (expected)
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 2 ]]
+	# Target file must be untouched
+	local content
+	content=$(cat "$target")
+	[[ "$content" == "original content" ]]
+}
+
+@test "symlink cursor file: touch stale protection skipped for symlink" {
+	# Create a symlink as cursor file pointing to an external target
+	local target="$TEST_TMPDIR/touch_target"
+	printf '42\n' > "$target"
+	local mtime_before
+	mtime_before=$(stat -c %Y "$target")
+	sleep 1
+	ln -s "$target" "$BASERUN/testlog"
+	# Run tlog_read — symlink detected in _tlog_parse_cursor, returns 2
+	# _tlog_write_cursor replaces symlink, but verify target was NOT touched
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 2 ]]
+	local mtime_after
+	mtime_after=$(stat -c %Y "$target")
+	[[ "$mtime_before" -eq "$mtime_after" ]]
+}
+
+@test "tlog_adjust_cursor: symlink cursor detected and silently skipped" {
+	_tlog_write_cursor "testlog" "$BASERUN" "500" "bytes"
+	local target="$TEST_TMPDIR/adj_target"
+	printf '500\n' > "$target"
+	rm -f "$BASERUN/testlog"
+	ln -s "$target" "$BASERUN/testlog"
+	run tlog_adjust_cursor "testlog" "$BASERUN" "100"
+	# _tlog_parse_cursor returns 2 (corrupt) but tlog_adjust_cursor
+	# treats empty cursor as no-op and returns 0
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == *"symlink detected"* ]]
+}
+
+@test "FP: regular cursor file not flagged as symlink" {
+	run tlog_read "$LOGFILE" "testlog" "$BASERUN" "bytes"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" != *"symlink"* ]]
+	[[ -f "$BASERUN/testlog" ]]
+	[[ ! -L "$BASERUN/testlog" ]]
+}

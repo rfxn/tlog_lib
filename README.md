@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml"><img src="https://github.com/rfxn/tlog_lib/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG"><img src="https://img.shields.io/badge/version-2.0.4-blue.svg?style=flat-square" alt="Version"></a>
+  <a href="CHANGELOG"><img src="https://img.shields.io/badge/version-2.0.5-blue.svg?style=flat-square" alt="Version"></a>
   <a href="https://www.gnu.org/software/bash/"><img src="https://img.shields.io/badge/bash-4.1%2B-green.svg?style=flat-square" alt="Bash"></a>
   <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html"><img src="https://img.shields.io/badge/license-GPL%20v2-orange.svg?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-linux-lightgrey.svg?style=flat-square" alt="Platform">
@@ -704,7 +704,7 @@ alerts). The cursor directory must be treated as security-sensitive state.
 
 | Attack | Impact |
 |--------|--------|
-| Symlink attack -- attacker creates `$BASERUN/syslog` as symlink to `/etc/passwd` | Cursor write overwrites the target file |
+| Symlink attack -- attacker creates `$BASERUN/syslog` as symlink to `/etc/passwd` | Mitigated: cursor reads and stale-protection touches reject symlinks; cursor writes use `mv -f` which replaces the symlink itself |
 | Cursor poisoning -- attacker writes a crafted value to the cursor file | Application skips log data or re-reads old data |
 | State leakage -- cursor filenames reveal which logs your application monitors | Information disclosure to unprivileged local users |
 | Race condition -- attacker deletes cursor between read and write | Application falls back to first-run, potentially re-processing entire log |
@@ -719,7 +719,7 @@ make -C tests test-rocky9    # Rocky 9
 make -C tests test-all       # Full 9-OS matrix
 ```
 
-Tests run inside Docker containers via BATS. 196 tests cover both tracking
+Tests run inside Docker containers via BATS. 206 tests cover both tracking
 modes, rotation (including copytruncate and multi-format compression),
 cursor validation and corruption, flock locking, atomic writes, journal
 functions, and the standalone CLI wrapper (68 tests covering option

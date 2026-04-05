@@ -1,8 +1,18 @@
-- 2.0.4 | Mar 23 2026:
+- 2.0.5 | Apr 05 2026:
+
+  -- Security --
+
+  [Fix] Add symlink guards on cursor read in _tlog_parse_cursor() and
+      tlog_journal_read() — prevents symlink-following on cursor files,
+      journal cursor files, and journal timestamp files (3 read sites)
+  [Fix] Add symlink guards on stale-protection touch in tlog_read() and
+      tlog_journal_read() — prevents mtime modification of symlink targets
+      (3 touch sites)
+  [New] 6 BATS tests for symlink detection, cursor rebuild, target
+      protection, stale-protection skip, and false-positive verification
 
   -- Changes --
 
-  [New] README restructured to rfxn documentation convention (floor level)
-  [New] SECURITY.md and CONTRIBUTING.md from RDF templates
-  [Change] Badge row updated to flat-square style with centered alignment
-  [Change] Sections reorganized to numbered format per documentation standard
+  [Change] Version bump 2.0.4 → 2.0.5
+  [Change] README: update threat model (symlink attack now mitigated),
+      test count 196 → 206
