@@ -19,6 +19,7 @@ tlog_lib CHANGELOG
   [Change] Version bump 2.0.4 → 2.0.5
   [Change] README: update threat model (symlink attack now mitigated),
       test count 196 → 206
+  [Change] CI: batsman workflow pin v1.0.3 → v1.4.0
 
 - 2.0.4 | Mar 23 2026:
 

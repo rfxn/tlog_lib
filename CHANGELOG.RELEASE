@@ -10,6 +10,7 @@
       (3 touch sites)
   [New] 6 BATS tests for symlink detection, cursor rebuild, target
       protection, stale-protection skip, and false-positive verification
+  [Change] CI: batsman workflow pin v1.0.3 → v1.4.0
 
   -- Changes --
 
