@@ -1,3 +1,16 @@
+- 2.0.6 | Apr 10 2026:
+
+  -- Changes --
+
+  [Change] files/tlog_lib.sh: removed 8 banner separator lines (#####
+      style) per core profile comment-discipline rule. All multi-line
+      function headers retained as load-bearing (out-parameter contracts
+      for _tlog_cursor_value/_tlog_cursor_mode, return-code tables,
+      rotation semantics, intentional-unquote invariant on $jfilter).
+  [Change] files/tlog: removed 16 banner separator lines (##### style).
+      CLI wrapper cleanup only; file-level header retained.
+  [Change] Version bump 2.0.5 → 2.0.6 (TLOG_LIB_VERSION + TLOG_VERSION)
+
 - 2.0.5 | Apr 05 2026:
 
   -- Security --
